@@ -1,66 +1,69 @@
 # Detour Agent Guide
 
-Chrome MV3 扩展，按域名列表把流量路由到用户设置的 SOCKS5 或 HTTP 代理（默认 SOCKS5 `127.0.0.1:12345`），公开开源（MIT）。需求见 `docs/requirements.md`，安装与使用见 `README.md`（中文版 `README.zh-CN.md`），工作区通用规则见 `/home/ubuntu/AGENTS.md`。
+Chrome MV3 extension that routes a domain list through the user's SOCKS5 or HTTP proxy (default SOCKS5 `127.0.0.1:12345`); open source under MIT. Requirements: `docs/requirements.md`. Install and usage: `README.md` (Chinese: `README.zh-CN.md`). In the maintainer's workspace, `/home/ubuntu/AGENTS.md` also applies.
 
-## 命令
+## Commands
 
-扩展本身无运行时依赖、无构建步骤；开发依赖只有 Playwright（端到端测试）。
+The extension has no runtime dependencies and no build step; the only dev dependency is Playwright (end-to-end tests).
 
-| 命令 | 作用 | 重型 |
+| Command | Purpose | Heavy |
 | --- | --- | --- |
-| `npm ci` | bootstrap，按 lockfile 安装 Playwright（不下载浏览器） | 否 |
-| `npm test` | `test/` 纯逻辑测试，快速门禁（秒级） | 否 |
-| `npm run test:e2e` | `e2e/` 在 Playwright Chromium（英文界面）中加载扩展的端到端测试（约 15 秒） | 是 |
-| `npm run check` | `npm test` + `npm run test:e2e`，唯一完整门禁 | 是 |
-| `npm run package` | 生成 `dist/detour-<manifest 版本>.zip`（`extension/` 内容和 `LICENSE` 位于 zip 根） | 否 |
-| `npm run update-psl` | 从 publicsuffix.org 重新生成 `extension/lib/psl-data.js`，需联网；更新后跑 `npm test` | 否 |
+| `npm ci` | Bootstrap: install Playwright from the lockfile (no browsers) | No |
+| `npx playwright install chromium` | Install the Chromium build matching the locked Playwright (needed once for e2e) | No |
+| `npm test` | Unit tests in `test/` (seconds) | No |
+| `npm run test:e2e` | `e2e/`: loads the extension in Playwright Chromium with an English UI (about 15 s) | Yes |
+| `npm run check` | `npm test` + `npm run test:e2e`, the full gate | Yes |
+| `npm run package` | Build `dist/detour-<manifest version>.zip` (`extension/` contents and `LICENSE` at the zip root) | No |
+| `npm run update-psl` | Regenerate `extension/lib/psl-data.js` from publicsuffix.org (network); run `npm test` afterwards | No |
 
-Node 22+（服务器与 CI 为 Node 24）。端到端测试使用 `~/.cache/ms-playwright` 中与 lockfile 内 Playwright 版本匹配的 Chromium（`channel: 'chromium'`，新版 headless 支持扩展）；升级 Playwright 时先确认对应 Chromium 已安装。
+Node 22+ (Node 24 locally and in CI). E2E uses `channel: 'chromium'` (new headless supports extensions) with the Chromium build that matches the locked Playwright version.
 
-## 代码地图
+## Code map
 
 ```text
 extension/
-  manifest.json      MV3 清单；权限 proxy、privacy、storage、webRequest，host_permissions <all_urls>；default_locale en
-  _locales/          en 与 zh_CN 的 messages.json（键集合必须一致，单元测试校验）
-  lib/psl-data.js    生成的公共后缀规则（只由 scripts/update-psl.js 写入）
-  lib/rules.js       纯逻辑（无 Chrome API）：域名规范化、主域名、列表匹配、代理校验、PAC 生成、各模式 proxy 配置、全局 bypass、状态校验
-  lib/i18n.js        chrome.i18n 封装：t()、formatTime()、localizePage() 填充 data-i18n* 属性
-  background.js      Service worker：读 storage → chrome.proxy.settings.set；角标；onProxyError / webRequest 非阻塞监听维护失败标记和本页域名
-  popup.html/js      弹窗：模式切换、当前网站状态与加入/移出、本页域名、打开管理页、错误与"被其他扩展控制"提示
-  manage.html/js     管理页（options_ui，新标签页打开）：排序、搜索、添加、删除与撤销、导入导出、代理服务器设置、WebRTC 开关
-  ui.css             弹窗与管理页共用样式
+  manifest.json      MV3 manifest; permissions proxy, privacy, storage, webRequest; host_permissions <all_urls>; default_locale en
+  _locales/          en and zh_CN messages.json (same keys and placeholders, checked by a unit test)
+  lib/psl-data.js    Generated Public Suffix List rules (written only by scripts/update-psl.js)
+  lib/rules.js       Pure logic, no Chrome APIs: normalization, registrable domain, list matching, proxy validation, PAC, per-mode proxy config, global bypass, state sanitizing, badge
+  lib/i18n.js        chrome.i18n wrapper: t(), formatTime(), localizePage() fills data-i18n* attributes
+  background.js      Service worker: storage -> chrome.proxy.settings.set; badges; passive onProxyError / webRequest listeners for the failure mark and page domains
+  popup.html/js      Popup: mode switch, current site and add/remove, page domains, open the list page, failure and "controlled by another extension" banners
+  manage.html/js     Proxy list page (options_ui, opens in a tab): sorted list, search, add, remove with undo, import/export, proxy server, WebRTC switch
+  ui.css             Shared styles
   icons/             16/48/128 PNG
-scripts/package.js   零依赖 zip 写入器（deflate）
-scripts/update-psl.js 下载并转换 Public Suffix List
-test/rules.test.js   针对 lib/rules.js 的契约测试
-e2e/                 端到端测试：本地 HTTP 站点 + 127.0.0.1:12345 SOCKS5 桩 + HTTP 代理桩 + host-resolver-rules，全程离线
-.github/workflows/ci.yml  push/PR 跑 npm run check；v* tag 校验与 manifest 版本一致后打包并发布 GitHub Release
-docs/images/         README 截图
+scripts/package.js   Dependency-free zip writer (deflate)
+scripts/update-psl.js Downloads and converts the Public Suffix List
+test/rules.test.js   Contract tests for lib/rules.js and the locale files
+e2e/                 Offline e2e: local HTTP site + SOCKS5 stub on 127.0.0.1:12345 + HTTP proxy stub + host-resolver-rules
+.github/workflows/ci.yml  push/PR: npm run check; v* tag: check the tag matches the manifest version, package, publish the GitHub Release
+docs/images/         README screenshots
 ```
 
-依赖方向：`background.js`、`popup.js`、`manage.js` → `lib/i18n.js`、`lib/rules.js` → `lib/psl-data.js`。界面文案只放在 `_locales`，页面和脚本不写死任何语言的文案；`badgeFor` 通过注入的 `msg` 函数取文案。
+Dependencies point one way: `background.js`, `popup.js`, `manage.js` → `lib/i18n.js`, `lib/rules.js` → `lib/psl-data.js`. UI text lives only in `_locales`; pages and scripts hard-code no text in any language, and `badgeFor` receives an injected `msg` function.
 
-事实 owner：模式、域名列表、代理、最近失败时间保存在 `chrome.storage.local`（键见 `rules.js` 的 `STATE_KEYS`：`mode`、`domains`、`proxy`、`lastProxyError`、`blockWebRtc`；`proxy` 为 `{scheme: 'socks5'|'http', host, port}`，缺失或无效时用 `DEFAULT_PROXY`）。弹窗和管理页只写 storage，service worker 监听 `storage.onChanged` 后重新应用代理并刷新角标，因此修改立即生效且不依赖页面存活。本页域名由 service worker 写入 `chrome.storage.session`（键 `page:<tabId>`，值 `{host: {proxied, failed}}`，记录全部 host），新的主框架请求时清空（同一请求的重定向不清空，并经 `onBeforeRedirect` 记录途经 host），标签页关闭时删除。
+Fact owners: mode, domain list, proxy and latest failure time live in `chrome.storage.local` (keys in `STATE_KEYS` of `rules.js`: `mode`, `domains`, `proxy`, `lastProxyError`, `blockWebRtc`; `proxy` is `{scheme: 'socks5'|'http', host, port}` and falls back to `DEFAULT_PROXY` when missing or invalid). The popup and list page only write storage; the service worker listens to `storage.onChanged`, reapplies the proxy and refreshes badges, so changes apply immediately without the pages staying open. Page domains are written by the service worker to `chrome.storage.session` (key `page:<tabId>`, value `{host: {proxied, failed}}`, every host), cleared on a new main-frame request (not on redirects of the same request; hops are recorded via `onBeforeRedirect`) and removed when the tab closes.
 
-角标由 `rules.js` 的 `badgeFor` 计算：全局角标按模式；有本页数据的标签页另设标签页角标（自动模式下为未覆盖主域名个数）。Chrome 在标签页加载新文档时会清除标签页角标，因此 `tabs.onUpdated` 加载状态变化时重新设置；非 http(s) 页面加载时清空该标签页的本页数据。
+"Covered by the list" means `coveringEntries(domains, host)` is non-empty: the host equals an entry or is a subdomain of one. The popup uses it for the current-site button (remove deletes every covering entry) and to hide "Add" on page domains; a registrable domain can sit under a listed public suffix (`avatars.githubusercontent.com` under `githubusercontent.com`), so exact-entry checks are wrong.
 
-Service worker 中的代理、WebRTC 策略（`blockWebRtc` 为真时 `webRTCIPHandlingPolicy` 设为 `disable_non_proxied_udp`，否则 `clear` 恢复默认）与角标更新经同一队列串行执行，每次读取最新 storage，不缓存状态；并发事件下旧状态不会覆盖新状态。
+Badges come from `badgeFor` in `rules.js`: the browser-wide badge shows the mode; tabs with page data get their own badge (the uncovered count in Auto mode). Chrome clears a tab's badge when it loads a new document, so `tabs.onUpdated` status changes reapply it; loading a non-http(s) page clears that tab's page data.
 
-## 测试门禁
+Proxy, WebRTC policy (`disable_non_proxied_udp` when `blockWebRtc` is true, otherwise `clear` to restore the default) and badge updates run through one serial queue in the service worker, each reading fresh storage with no cached state, so an older state never overwrites a newer one under concurrent events.
 
-- `npm test` 覆盖：normalize/mainDomain 契约、子域名匹配（含 `notgoogle.com` 不匹配）、去重添加、代理校验（类型、地址、端口）与无效存储回退默认、PAC 在 `node:vm` 中返回 `SOCKS5 host:port` / `PROXY host:port` / `DIRECT`、PAC 不引用任何会触发 DNS 的函数、三种模式的 proxy 配置与全局 bypass 判断、连接失败识别与本页域名归组、导入合并与导出格式、角标优先级与漏网计数、中英语言文件键与占位符一致。
-- `npm run test:e2e` 覆盖：三种模式的实际分流、本页域名（走代理、直连、被拦截、失败、重定向途经）、漏网个数角标（颜色、加入后减少、换模式、换页面、非网页清零）、代理失败角标与恢复、管理页（单标签、添加、撤销删除、导入导出）、弹窗与管理页无缺失文案、代理设置表单（无效端口拒绝、改为 HTTP 代理后自动与全局模式经 HTTP 代理）、WebRTC 开关。
-- 修改 `rules.js` 先跑 `npm test`；修改 `background.js`、页面或 manifest 跑 `npm run test:e2e`；交付前跑一次 `npm run check` 和 `npm run package` 并核对 zip 文件列表。
-- 新测试只为需求或不变量而写，优先扩展 `test/rules.test.js`。
+## Test gates
 
-## 项目特有风险
+- `npm test` covers: normalize/registrable-domain contract, subdomain matching (`notgoogle.com` does not match), covering entries under a listed public suffix, de-duplicated add, proxy validation (type, host, port) and fallback for invalid stored values, PAC in `node:vm` returning `SOCKS5 host:port` / `PROXY host:port` / `DIRECT`, PAC referencing no DNS helpers, per-mode proxy config and global bypass, connection-failure detection and page-domain grouping, import merge and export format, badge priority and uncovered count, en/zh_CN locale parity.
+- `npm run test:e2e` covers: routing in all three modes, page domains (proxied, direct, blocked, failed, redirect hops), uncovered-count badge (colors, drop after adding, mode switch, new page, non-web page reset), proxy failure badge and recovery, list page (single tab, add, undo remove, import/export), no missing UI text in popup and list page, proxy form (invalid port rejected, HTTP proxy used in Auto and Global), WebRTC switch.
+- After changing `rules.js` run `npm test`; after changing `background.js`, pages or the manifest run `npm run test:e2e`; before delivery run `npm run check` once and `npm run package`, and check the zip file list.
+- Add tests only for requirements or invariants, preferably by extending `test/rules.test.js`.
 
-- **端到端测试占用固定端口**：默认代理为 `127.0.0.1:12345`，`test:e2e` 必须在该端口启动 SOCKS5 桩；端口被占用时测试直接失败，不能并行运行两份。
-- **不回退直连**：PAC 只返回 `SOCKS5 host:port` 或 `PROXY host:port`，不得追加 `; DIRECT`；全局模式用 `fixed_servers` + `singleProxy`。这是需求（失败可见）而非缺陷。
-- **PAC 不做 DNS**：PAC 只允许对 `host` 做字符串操作，禁止 `dnsResolve`、`isResolvable`、`isInNet`、`myIpAddress` 等；被代理域名由代理端解析。
-- **导航不依赖 service worker**：代理设置通过 `chrome.proxy.settings` 由 Chrome 持久化。不得加入阻塞式 `webRequest` 监听或 `chrome.proxy.onRequest`；service worker 只被动监听并在 install/startup/状态变化时重新应用。
-- **代理控制权**：Chrome 只允许一个扩展控制代理。`levelOfControl` 为 `controlled_by_other_extensions` 时本扩展的设置无效，弹窗负责提示。
-- **公共后缀列表**：主域名由 `extension/lib/psl-data.js`（`npm run update-psl` 从 publicsuffix.org 生成，含 ICANN 与 PRIVATE 段，规则已转为 punycode）计算。不得退回"取最后两段"，否则 `google.com.hk` 会变成 `com.hk`，加入后代理整个后缀。生成文件只由脚本更新，不手改。
-- **失败标记**：由 `chrome.proxy.onProxyError` 与 `webRequest.onErrorOccurred` 中的 `net::ERR_PROXY_*` / `ERR_SOCKS_*` / `ERR_TUNNEL_CONNECTION_FAILED` 置位，由命中当前规则且走代理、非缓存的请求 `onCompleted` 清除。HTTP 代理不可达同样报 `ERR_PROXY_CONNECTION_FAILED`。
-- **发布**：版本号只在 `extension/manifest.json` 与 `package.json` 维护且保持一致；发布 = 提交版本号后推送 `v<版本>` tag，由 CI 生成 Release，不手动上传 zip。仓库公开，提交作者使用 GitHub noreply 邮箱（仓库本地 git config）。
+## Project risks
+
+- **E2E uses a fixed port**: the default proxy is `127.0.0.1:12345`, so `test:e2e` starts its SOCKS5 stub there; if the port is taken the tests fail, and two runs cannot overlap.
+- **No direct fallback**: PAC returns only `SOCKS5 host:port` or `PROXY host:port`, never with `; DIRECT`; Global mode uses `fixed_servers` + `singleProxy`. This is a requirement (visible failures), not a bug.
+- **No DNS in PAC**: PAC does string operations on `host` only; no `dnsResolve`, `isResolvable`, `isInNet`, `myIpAddress` and the like. Proxied hostnames are resolved by the proxy.
+- **Navigation never waits on the service worker**: Chrome persists the proxy settings. Do not add blocking `webRequest` listeners or `chrome.proxy.onRequest`; the service worker only listens passively and reapplies settings on install, startup and state changes.
+- **Proxy control**: Chrome lets one extension control the proxy. With `levelOfControl` `controlled_by_other_extensions` our settings have no effect and the popup says so.
+- **Public Suffix List**: registrable domains come from `extension/lib/psl-data.js` (generated by `npm run update-psl`, ICANN and PRIVATE sections, punycoded). Never fall back to "last two labels": `google.com.hk` would become `com.hk`, and adding it would proxy the whole suffix. Only the script writes the generated file.
+- **Failure mark**: set by `chrome.proxy.onProxyError` and by `net::ERR_PROXY_*` / `ERR_SOCKS_*` / `ERR_TUNNEL_CONNECTION_FAILED` in `webRequest.onErrorOccurred`; cleared by a non-cached `onCompleted` of a request the current rules proxy. An unreachable HTTP proxy also reports `ERR_PROXY_CONNECTION_FAILED`.
+- **Releases**: the version lives in `extension/manifest.json` and `package.json` and must match; a release is a version-bump commit followed by pushing the `v<version>` tag, and CI publishes the Release (no manual zip uploads). The repository is public; commits use the GitHub noreply address (repository-local git config).

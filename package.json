@@ -1,6 +1,6 @@
 {
   "name": "detour",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Chrome extension: route chosen domains through a local SOCKS5 or HTTP proxy, everything else direct.",
   "license": "MIT",

@@ -7,6 +7,7 @@ import {
   DEFAULT_PROXY,
   addDomain,
   badgeFor,
+  coveringEntries,
   buildPacScript,
   buildProxyConfig,
   exportDomains,
@@ -51,6 +52,14 @@ test('matchesList: exact and subdomain match, no partial-label match', () => {
   assert.equal(matchesList('WWW.GOOGLE.COM', domains), true);
   assert.equal(matchesList('notgoogle.com', domains), false);
   assert.equal(matchesList('google.com.evil.net', domains), false);
+});
+
+test('coveringEntries: list entries that make a domain proxied, including a parent public suffix entry', () => {
+  const domains = ['githubusercontent.com', 'mail.google.com', 'example.org'];
+  assert.equal(mainDomain('avatars.githubusercontent.com'), 'avatars.githubusercontent.com');
+  assert.deepEqual(coveringEntries(domains, 'avatars.githubusercontent.com'), ['githubusercontent.com']);
+  assert.deepEqual(coveringEntries(domains, 'example.org'), ['example.org']);
+  assert.deepEqual(coveringEntries(domains, 'google.com'), []);
 });
 
 test('addDomain: normalizes, deduplicates, rejects invalid input', () => {
