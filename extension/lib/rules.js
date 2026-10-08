@@ -96,10 +96,15 @@ export function mainDomain(host) {
   return labels.slice(Math.max(suffixStart - 1, 0)).join('.');
 }
 
+/** List entries that equal host or are a parent of it, i.e. the entries that make host proxied in auto mode. */
+export function coveringEntries(domains, host) {
+  const h = String(host).toLowerCase();
+  return domains.filter((d) => h === d || h.endsWith('.' + d));
+}
+
 /** True when host equals a listed domain or is one of its subdomains. */
 export function matchesList(host, domains) {
-  const h = String(host).toLowerCase();
-  return domains.some((d) => h === d || h.endsWith('.' + d));
+  return coveringEntries(domains, host).length > 0;
 }
 
 /** Add a domain to the list without duplicates; returns the new list (or the same list). */

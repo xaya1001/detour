@@ -1,5 +1,5 @@
 import { formatTime, localizePage, t } from './lib/i18n.js';
-import { STATE_KEYS, addDomain, formatProxy, isProxiedHost, mainDomain, normalizeDomain, removeDomain, sanitizeState, summarizePageHosts } from './lib/rules.js';
+import { STATE_KEYS, addDomain, coveringEntries, formatProxy, isProxiedHost, mainDomain, normalizeDomain, sanitizeState, summarizePageHosts } from './lib/rules.js';
 
 const el = {
   errorBanner: document.getElementById('error-banner'),
@@ -56,7 +56,7 @@ function renderCurrent() {
     el.currentStatus.textContent = t(proxied ? 'statusProxied' : 'statusDirect');
     el.currentStatus.className = `tag tag-${proxied ? 'proxy' : 'direct'}`;
   }
-  const listed = domain !== null && state.domains.includes(domain);
+  const listed = domain !== null && coveringEntries(state.domains, domain).length > 0;
   el.toggleCurrent.disabled = domain === null;
   el.toggleCurrent.textContent = t(listed ? 'removeFromList' : 'addToList');
   el.toggleCurrent.classList.toggle('secondary', listed);
@@ -76,7 +76,7 @@ function renderPage() {
       if (g.proxied) tags.append(tag(t('statusProxied'), 'proxy'));
       if (g.direct) tags.append(tag(t('statusDirect'), 'direct'));
       li.append(name, tags);
-      if (!state.domains.includes(g.domain)) {
+      if (coveringEntries(state.domains, g.domain).length === 0) {
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'small';
@@ -118,7 +118,8 @@ for (const input of el.modeInputs) {
 el.toggleCurrent.addEventListener('click', () => {
   const domain = mainDomain(currentHost);
   if (domain === null) return;
-  saveDomains(state.domains.includes(domain) ? removeDomain(state.domains, domain) : addDomain(state.domains, domain).domains);
+  const covering = coveringEntries(state.domains, domain);
+  saveDomains(covering.length > 0 ? state.domains.filter((d) => !covering.includes(d)) : addDomain(state.domains, domain).domains);
 });
 
 el.openManage.addEventListener('click', async () => {
