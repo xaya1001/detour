@@ -1,64 +1,65 @@
 # Detour Requirements
 
-## 用户与问题
+## Users and problem
 
-用户在本机或局域网运行一个代理程序（如 GOST、Clash、v2rayN），提供 SOCKS5 或 HTTP 代理端口。用户希望 Chrome 只让指定域名经该代理访问，其余网址直连，并在浏览器内随手切换模式和管理域名列表。现成的代理切换扩展功能过多，用户只需要这一件事。Detour 是开源项目，用户从 GitHub Release 下载 zip 自行安装。
+Users run a proxy program on their machine or LAN (GOST, Clash, v2rayN, …) that offers a SOCKS5 or HTTP proxy port. They want Chrome to send only chosen domains through that proxy and connect to everything else directly, and to switch modes and edit the domain list from the browser at any time. Existing proxy-switching extensions do far more than that; these users need only this one thing. Detour is open source; users download the zip from GitHub Releases and install it themselves.
 
-## 核心场景
+## Core scenarios
 
-1. 自动代理：用户选择"自动代理"后，列表中的域名及其全部子域名经代理访问，其余网址直连。成功标准：列表内网站可打开，列表外网站不经过代理。
-2. 当前网站：用户打开扩展弹窗，看到当前网站是"走代理"还是"直连"；点击"加入代理列表"，该网站的主域名（如 `mail.google.com` 加入 `google.com`）进入列表并立即生效；主域名已在列表中时按钮变为"移出代理列表"。
-3. 本页域名：用户打开弹窗，看到当前页面请求过的全部域名，每个标明走代理、直连或连接失败；不在列表中的域名旁有"加入"按钮，点击后把它的主域名加入列表，刷新页面后生效。页面缺图或视频加载不出时，失败的域名排在最前。
-4. 管理列表：用户从弹窗或扩展图标右键菜单的"选项"打开管理页（新标签页），查看按字母排序的全部域名，按关键字筛选，手动输入添加，或删除某一项；修改立即生效。
-5. 全局代理：用户选择"全局代理"后，所有网址经代理访问；`localhost`、`127.0.0.0/8`、局域网私有地址和 `.local` 仍然直连。
-6. 直连：用户选择"直连"后，扩展不再代理任何网址。
-7. 代理失败可见：代理连接失败时网页直接打不开，不回退直连；扩展图标显示红色错误标记，弹窗显示"代理连接失败"及最近失败时间。代理请求再次成功后错误标记自动消失。
-8. 阻止 WebRTC 直连：用户在管理页打开"阻止 WebRTC 直连"开关后，网页无法通过 WebRTC 直连获取用户的真实 IP；关闭后恢复 Chrome 默认行为。默认关闭。
-9. 漏网提示：自动代理模式下，扩展图标显示当前标签页中按当前列表不会走代理的主域名个数（不含本机和局域网地址）；其中有连接失败的域名时数字为红色，否则为灰色；数字为 0 时显示自动代理标记。用户加入域名后数字立即减少，打开新页面时重新计数。
-10. 代理设置：用户在管理页选择代理类型（SOCKS5 或 HTTP）并填写代理地址和端口，保存后立即生效；地址或端口无效时不保存并提示原因。未设置时为 SOCKS5 `127.0.0.1:12345`。
-11. 界面语言：浏览器语言为简体中文时界面显示中文，其余语言显示英文。
+1. Auto mode: with "Auto" selected, listed domains and all their subdomains go through the proxy and everything else connects directly. Success: listed sites open, unlisted sites do not use the proxy.
+2. Current site: the popup shows whether the current site is "Proxied" or "Direct". "Add to proxy list" adds the site's registrable domain (`mail.google.com` adds `google.com`) and takes effect immediately. When the site is already covered by the list (its domain or a parent of it is listed), the button becomes "Remove from proxy list" and removes the covering entries.
+3. Domains on this page: the popup lists every domain the current page requested, each marked Proxied, Direct or Failed. Domains not covered by the list have an "Add" button that adds the registrable domain; it takes effect after reloading the page. When images or videos fail to load, the failed domains are listed first.
+4. Managing the list: from the popup, or "Options" in the extension icon's context menu, the user opens the proxy list page (a new tab), sees all domains sorted alphabetically, filters by keyword, adds a domain by typing it, or removes one. Changes take effect immediately.
+5. Global mode: with "Global" selected, every address goes through the proxy; `localhost`, `127.0.0.0/8`, private LAN addresses and `.local` still connect directly.
+6. Direct mode: with "Direct" selected, nothing is proxied.
+7. Visible proxy failure: when the proxy cannot be reached, proxied pages fail to load and never fall back to a direct connection. The icon shows a red error mark and the popup shows "Proxy connection failed" with the time of the latest failure. The mark clears once a proxied request succeeds again.
+8. Block direct WebRTC: with "Block direct WebRTC" switched on in the proxy list page, pages cannot learn the user's real IP through direct WebRTC connections; switching it off restores Chrome's default. Off by default.
+9. Uncovered domains: in Auto mode, the icon shows how many registrable domains on the current tab the list does not cover (excluding local and LAN addresses). The number is red when one of them failed and gray otherwise; at zero the icon shows the Auto mark. Adding a domain lowers the number immediately; a new page is counted afresh.
+10. Proxy settings: on the proxy list page the user chooses the proxy type (SOCKS5 or HTTP) and enters the host and port; saving takes effect immediately. An invalid host or port is not saved and the reason is shown. Without a saved setting the proxy is SOCKS5 `127.0.0.1:12345`.
+11. UI language: the UI is in Simplified Chinese when the browser language is Simplified Chinese and in English otherwise.
 
-## 能力范围
+## Scope
 
-- 三种模式：自动代理、全局代理、直连，在弹窗中切换，当前模式在弹窗和图标上可辨认。
-- 图标角标优先级：代理连接失败标记最高；自动代理模式下其次是当前标签页的漏网域名个数；全局代理和直连模式不显示个数。
-- 代理：一个代理服务器，类型为 SOCKS5 或 HTTP，地址为域名、IPv4 或 IPv6 地址，端口 1–65535，在管理页设置；未设置时为 SOCKS5 `127.0.0.1:12345`。被代理的域名由代理端解析，不在本地做 DNS 查询。代理连接失败提示中显示当前代理地址。
-- 弹窗：模式切换、当前网站是否走代理、加入或移出当前网站的主域名、本页域名、打开管理页。
-- 本页域名：按主域名归组，列出当前标签页本次打开后请求过的全部域名及其状态（走代理、直连、失败），包括打开过程中重定向经过的域名（如登录跳转）；失败的排在前面；不在列表中的域名可一键加入。失败指请求以网络错误结束，仍在等待中的请求不显示为失败。页面重新打开或跳转到新页面时清空，标签页关闭或浏览器重启后不保留。
-- 管理页：在新标签页中打开，列表按字母排序，可筛选、手动添加、删除，删除后可撤销；已打开时再次打开只切换到该标签页。
-- WebRTC：管理页提供"阻止 WebRTC 直连"开关，默认关闭；开启时 WebRTC 只能使用经代理的连接，对所有网站生效，直连网站的音视频通话可能受影响；代理设置被其他扩展控制时提示。
-- 导入导出：管理页可把列表导出为每行一个域名的文本文件；导入同样格式的文件时与现有列表合并，不删除已有域名，并显示新增、已存在和无效的数量。
-- 域名列表：主域名按内置的公共后缀列表（Public Suffix List）计算，即公共后缀再加一段（如 `mail.google.com` 为 `google.com`，`www.google.com.hk` 为 `google.com.hk`，`svc-1.us-central1.run.app` 为其自身）；IP 地址按原样加入；匹配时包含全部子域名；重复项不重复加入。
-- 列表和模式保存在本机 Chrome，重启浏览器后保持。
-- 界面语言：中文和英文，按浏览器语言自动选择，简体中文以外均显示英文。
-- 发布：以 MIT 许可证在 GitHub 开源；推送版本 tag 时自动测试、打包并发布 GitHub Release，附 `detour-<版本>.zip`；README 提供英文和中文两份，说明以"加载已解压的扩展程序"方式在 Chrome 安装。内置的公共后缀列表保留其 MPL 2.0 许可声明。
+- Three modes, Auto, Global and Direct, switched in the popup; the current mode is recognizable in the popup and on the icon.
+- Badge priority: the proxy failure mark first; then, in Auto mode, the current tab's uncovered domain count; Global and Direct modes show no count.
+- Proxy: one proxy server, type SOCKS5 or HTTP, host a domain name, IPv4 or IPv6 address, port 1–65535, set on the proxy list page; SOCKS5 `127.0.0.1:12345` when not set. Proxied hostnames are resolved by the proxy, with no local DNS lookup. The proxy failure message shows the current proxy address.
+- Popup: mode switch, whether the current site is proxied, add or remove the current site, domains on this page, open the proxy list page.
+- Domains on this page: grouped by registrable domain; every domain the current tab requested since it was last opened, with its state (Proxied, Direct, Failed), including domains passed through on redirects (such as login hops); failed ones first; domains not covered by the list can be added in one click. Failed means the request ended in a network error; pending requests are not shown as failed. Cleared when the page is reloaded or navigates to a new page; not kept after the tab closes or the browser restarts.
+- Proxy list page: opens in a new tab; alphabetical list with filtering, manual add and remove with undo; opening it again switches to the existing tab.
+- WebRTC: a "Block direct WebRTC" switch on the proxy list page, off by default; when on, WebRTC may use only proxied connections, for all sites, which may affect calls on directly connected sites; shows a notice when another extension controls the setting.
+- Import and export: the list exports as a text file with one domain per line; importing such a file merges it into the current list without removing anything and reports how many were added, already listed and invalid.
+- Domain list: registrable domains come from the bundled Public Suffix List, i.e. the public suffix plus one label (`mail.google.com` → `google.com`, `www.google.com.hk` → `google.com.hk`, `svc-1.us-central1.run.app` → itself); IP addresses are added as they are; an entry matches itself and all its subdomains; duplicates are not added.
+- The list, mode and proxy are stored in the local Chrome profile and survive browser restarts.
+- UI language: English and Simplified Chinese, chosen from the browser language; anything other than Simplified Chinese shows English.
+- Distribution: open source on GitHub under the MIT license; pushing a version tag tests, packages and publishes a GitHub Release with `detour-<version>.zip`; English and Chinese READMEs explain installing it in Chrome with "Load unpacked". The bundled Public Suffix List keeps its MPL 2.0 notice.
 
-## 不做的事
+## Out of scope
 
-- 不提供多个代理、按域名指定不同代理或代理认证。
-- 不在多台设备间同步域名列表。
-- 不支持按网址路径、通配符或正则匹配。
-- 不提供快捷键。
-- 代理失败时不回退直连。
-- 不上架 Chrome 网上应用店，不支持 Chrome 以外的浏览器。
-- 不提供中英文以外的界面语言，也不提供界面内的语言切换。
+- Multiple proxies, per-domain proxies or proxy authentication.
+- Syncing the list across devices.
+- Matching by URL path, wildcard or regular expression.
+- Keyboard shortcuts.
+- Falling back to direct connections when the proxy fails.
+- Publishing to the Chrome Web Store; browsers other than Chrome.
+- UI languages other than English and Simplified Chinese, or an in-app language switch.
 
-## 验收标准
+## Acceptance criteria
 
-- 自动代理模式下，列表内域名及其子域名经代理访问，列表外网址直连。
-- 全局代理模式下，公网网址经代理访问，本机和局域网地址直连。
-- 直连模式下，任何网址都不经过代理。
-- 在 `mail.google.com` 点击"加入代理列表"后，列表出现 `google.com`，`www.google.com` 随即经代理访问，弹窗显示"走代理"，按钮变为"移出代理列表"；点击移出后恢复直连。
-- 在 `www.google.com.hk` 点击"加入代理列表"加入的是 `google.com.hk` 而不是 `com.hk`；本页域名中 Cloud Run 服务 `svc-1.us-central1.run.app` 按完整服务域名归组，不显示为 `run.app`。
-- 自动代理模式下列表只有 `google.com` 时打开 Google，本页域名同时显示走代理的 `google.com` 和直连的 `gstatic.com` 等域名，后者带"加入"按钮；全局模式下不在列表中的走代理域名同样带"加入"按钮。
-- 引用了直连失败域名的页面，该域名显示失败并排在最前；点击"加入"后刷新页面，该域名改为走代理。
-- 管理页中列表按字母排序，输入关键字只显示匹配项；删除后可撤销；在管理页增删域名后弹窗同步显示；重复打开不会产生多个管理页标签。
-- 停止 GOST 后访问被代理的网址，页面打不开，图标出现错误标记，弹窗显示失败时间；恢复 GOST 并成功访问后标记消失。
-- 自动代理模式下打开引用了一个未列入的直连域名和一个直连失败域名的页面，图标显示红色 2；把其中一个主域名加入列表后立即变为 1；切换到全局代理后显示全局标记。
-- 打开一个经跨域重定向到达的页面（如登录跳转），本页域名同时包含重定向经过的域名和最终页面的域名。
-- 开启"阻止 WebRTC 直连"后，Chrome 的 WebRTC IP 处理策略为仅经代理；关闭后恢复默认；重启浏览器后开关状态保持。
-- 导出的文件导入到全新安装的扩展后，列表与导出时一致；导入时已有域名保持不变，无效行被跳过并计数。
-- 在管理页把代理改为 HTTP `127.0.0.1:8080` 后，自动代理模式下列表内域名经该 HTTP 代理访问，全局代理模式同样使用它；端口填 `0` 或地址为空时不保存并提示原因；未设置过代理的新安装使用 SOCKS5 `127.0.0.1:12345`。
-- 浏览器语言为英文时弹窗和管理页全部显示英文，为简体中文时全部显示中文。
-- 推送版本 tag 后，GitHub Release 出现对应版本的 zip，解压后可直接以"加载已解压的扩展程序"安装。
-- 切换模式、修改代理、增删域名后无需重启浏览器即生效；重启浏览器后模式、代理和列表保持。
+- In Auto mode, listed domains and their subdomains go through the proxy and unlisted addresses connect directly.
+- In Global mode, public addresses go through the proxy and local and LAN addresses connect directly.
+- In Direct mode, no address goes through the proxy.
+- On `mail.google.com`, "Add to proxy list" adds `google.com`; `www.google.com` then goes through the proxy, the popup shows "Proxied" and the button becomes "Remove from proxy list"; removing it restores direct connections.
+- On `www.google.com.hk`, "Add to proxy list" adds `google.com.hk`, not `com.hk`; in domains on this page, the Cloud Run service `svc-1.us-central1.run.app` is grouped under its full service domain, not `run.app`.
+- With only `google.com` listed in Auto mode, opening Google shows both the proxied `google.com` and directly connected domains such as `gstatic.com`, the latter with an "Add" button; in Global mode, proxied domains not covered by the list also have an "Add" button.
+- With `githubusercontent.com` listed, `avatars.githubusercontent.com` (its own registrable domain, because `githubusercontent.com` is a public suffix) shows as Proxied without an "Add" button, and on such a site the popup button reads "Remove from proxy list".
+- On a page that references a domain failing to connect directly, that domain shows as Failed and is listed first; after "Add" and a reload it is proxied.
+- The proxy list page sorts alphabetically, a keyword shows only matching entries, removal can be undone, changes on the page show up in the popup, and opening it again does not create a second tab.
+- With GOST stopped, a proxied address fails to load, the icon shows the error mark and the popup shows the failure time; after GOST is back and a proxied page loads, the mark clears.
+- In Auto mode, a page that references one unlisted direct domain and one failing direct domain shows a red 2; adding one of them drops it to 1 immediately; switching to Global shows the Global mark.
+- A page reached through a cross-domain redirect (such as a login hop) lists both the domains along the redirect and the final page's domains.
+- With "Block direct WebRTC" on, Chrome's WebRTC IP handling policy is proxied-only; off restores the default; the switch survives a browser restart.
+- An exported file imported into a fresh install restores the same list; importing keeps existing domains and skips and counts invalid lines.
+- After changing the proxy to HTTP `127.0.0.1:8080` on the proxy list page, listed domains in Auto mode and all public addresses in Global mode go through that HTTP proxy; port `0` or an empty host is not saved and the reason is shown; a fresh install uses SOCKS5 `127.0.0.1:12345`.
+- With an English browser the popup and the proxy list page are entirely in English; with a Simplified Chinese browser, entirely in Chinese.
+- After a version tag is pushed, the GitHub Release has that version's zip, which installs with "Load unpacked" after unzipping.
+- Switching modes, changing the proxy and editing the list take effect without restarting the browser; mode, proxy and list survive a restart.
