@@ -1,0 +1,170 @@
+{
+  "extDescription": {
+    "message": "指定域名经本地 SOCKS5 或 HTTP 代理访问，其余网址直连。"
+  },
+  "badgeProxyFailed": {
+    "message": "Detour · 代理连接失败"
+  },
+  "badgeGlobal": {
+    "message": "Detour · 全局代理"
+  },
+  "badgeDirect": {
+    "message": "Detour · 直连"
+  },
+  "badgeAuto": {
+    "message": "Detour · 自动代理"
+  },
+  "badgeUncovered": {
+    "message": "Detour · 自动代理 · 本页 $1 个域名直连"
+  },
+  "badgeUncoveredFailed": {
+    "message": "Detour · 自动代理 · 本页 $1 个域名直连，其中有连接失败"
+  },
+  "proxyFailed": {
+    "message": "代理连接失败"
+  },
+  "proxyFailedDetail": {
+    "message": "$1 · 最近失败：$2"
+  },
+  "proxyControlled": {
+    "message": "代理设置由其他扩展控制，本扩展的设置未生效。"
+  },
+  "modeLabel": {
+    "message": "代理模式"
+  },
+  "modeAuto": {
+    "message": "自动代理"
+  },
+  "modeGlobal": {
+    "message": "全局代理"
+  },
+  "modeDirect": {
+    "message": "直连"
+  },
+  "currentSite": {
+    "message": "当前网站"
+  },
+  "statusProxied": {
+    "message": "走代理"
+  },
+  "statusDirect": {
+    "message": "直连"
+  },
+  "statusFailed": {
+    "message": "失败"
+  },
+  "addToList": {
+    "message": "加入代理列表"
+  },
+  "removeFromList": {
+    "message": "移出代理列表"
+  },
+  "pageDomains": {
+    "message": "本页域名"
+  },
+  "pageCount": {
+    "message": "$1 项"
+  },
+  "pageEmpty": {
+    "message": "暂无请求记录"
+  },
+  "addShort": {
+    "message": "加入"
+  },
+  "manageList": {
+    "message": "管理代理列表"
+  },
+  "manageTitle": {
+    "message": "代理列表 · Detour"
+  },
+  "listHeading": {
+    "message": "代理列表"
+  },
+  "import": {
+    "message": "导入"
+  },
+  "export": {
+    "message": "导出"
+  },
+  "addPlaceholder": {
+    "message": "添加域名，如 example.com"
+  },
+  "add": {
+    "message": "添加"
+  },
+  "search": {
+    "message": "搜索"
+  },
+  "listCount": {
+    "message": "$1 个域名"
+  },
+  "listCountFiltered": {
+    "message": "$1 / $2 个域名"
+  },
+  "listEmpty": {
+    "message": "列表为空，在上方输入域名添加"
+  },
+  "noMatch": {
+    "message": "没有包含\"$1\"的域名"
+  },
+  "removeDomain": {
+    "message": "删除 $1"
+  },
+  "domainAdded": {
+    "message": "已添加 $1"
+  },
+  "domainListed": {
+    "message": "$1 已在列表中"
+  },
+  "domainInvalid": {
+    "message": "域名无效"
+  },
+  "domainRemoved": {
+    "message": "已删除 $1"
+  },
+  "undo": {
+    "message": "撤销"
+  },
+  "exported": {
+    "message": "已导出 $1 个域名"
+  },
+  "imported": {
+    "message": "导入完成：新增 $1 个，已存在 $2 个，无效 $3 个"
+  },
+  "settings": {
+    "message": "设置"
+  },
+  "proxyServer": {
+    "message": "代理服务器"
+  },
+  "proxyType": {
+    "message": "类型"
+  },
+  "proxyHost": {
+    "message": "地址"
+  },
+  "proxyPort": {
+    "message": "端口"
+  },
+  "save": {
+    "message": "保存"
+  },
+  "proxySaved": {
+    "message": "已保存：$1"
+  },
+  "proxyInvalidHost": {
+    "message": "地址无效：请填写域名或 IP 地址"
+  },
+  "proxyInvalidPort": {
+    "message": "端口无效：请填写 1–65535"
+  },
+  "webRtcBlock": {
+    "message": "阻止 WebRTC 直连"
+  },
+  "webRtcHint": {
+    "message": "网页无法通过 WebRTC 获取真实 IP。对所有网站生效，直连网站的音视频通话可能受影响。"
+  },
+  "webRtcControlled": {
+    "message": "WebRTC 设置由其他扩展控制，本开关未生效。"
+  }
+}

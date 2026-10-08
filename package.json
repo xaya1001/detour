@@ -1,0 +1,21 @@
+{
+  "name": "detour",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension: route chosen domains through a local SOCKS5 or HTTP proxy, everything else direct.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:e2e": "node --test \"e2e/**/*.test.js\"",
+    "check": "npm test && npm run test:e2e",
+    "package": "node scripts/package.js",
+    "update-psl": "node scripts/update-psl.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "extDescription": {
+    "message": "Route chosen domains through your local SOCKS5 or HTTP proxy; everything else connects directly."
+  },
+  "badgeProxyFailed": {
+    "message": "Detour · Proxy connection failed"
+  },
+  "badgeGlobal": {
+    "message": "Detour · Global"
+  },
+  "badgeDirect": {
+    "message": "Detour · Direct"
+  },
+  "badgeAuto": {
+    "message": "Detour · Auto"
+  },
+  "badgeUncovered": {
+    "message": "Detour · Auto · Direct domains on this page: $1"
+  },
+  "badgeUncoveredFailed": {
+    "message": "Detour · Auto · Direct domains on this page: $1, some failed"
+  },
+  "proxyFailed": {
+    "message": "Proxy connection failed"
+  },
+  "proxyFailedDetail": {
+    "message": "$1 · Last failure: $2"
+  },
+  "proxyControlled": {
+    "message": "Another extension controls the proxy settings, so Detour's settings are not in effect."
+  },
+  "modeLabel": {
+    "message": "Proxy mode"
+  },
+  "modeAuto": {
+    "message": "Auto"
+  },
+  "modeGlobal": {
+    "message": "Global"
+  },
+  "modeDirect": {
+    "message": "Direct"
+  },
+  "currentSite": {
+    "message": "This site"
+  },
+  "statusProxied": {
+    "message": "Proxied"
+  },
+  "statusDirect": {
+    "message": "Direct"
+  },
+  "statusFailed": {
+    "message": "Failed"
+  },
+  "addToList": {
+    "message": "Add to proxy list"
+  },
+  "removeFromList": {
+    "message": "Remove from proxy list"
+  },
+  "pageDomains": {
+    "message": "Domains on this page"
+  },
+  "pageCount": {
+    "message": "$1"
+  },
+  "pageEmpty": {
+    "message": "No requests recorded"
+  },
+  "addShort": {
+    "message": "Add"
+  },
+  "manageList": {
+    "message": "Manage proxy list"
+  },
+  "manageTitle": {
+    "message": "Proxy list · Detour"
+  },
+  "listHeading": {
+    "message": "Proxy list"
+  },
+  "import": {
+    "message": "Import"
+  },
+  "export": {
+    "message": "Export"
+  },
+  "addPlaceholder": {
+    "message": "Add a domain, e.g. example.com"
+  },
+  "add": {
+    "message": "Add"
+  },
+  "search": {
+    "message": "Search"
+  },
+  "listCount": {
+    "message": "Domains: $1"
+  },
+  "listCountFiltered": {
+    "message": "Domains: $1 / $2"
+  },
+  "listEmpty": {
+    "message": "The list is empty. Add a domain above."
+  },
+  "noMatch": {
+    "message": "No domains contain \"$1\""
+  },
+  "removeDomain": {
+    "message": "Remove $1"
+  },
+  "domainAdded": {
+    "message": "Added $1"
+  },
+  "domainListed": {
+    "message": "$1 is already in the list"
+  },
+  "domainInvalid": {
+    "message": "Invalid domain"
+  },
+  "domainRemoved": {
+    "message": "Removed $1"
+  },
+  "undo": {
+    "message": "Undo"
+  },
+  "exported": {
+    "message": "Exported domains: $1"
+  },
+  "imported": {
+    "message": "Import done: $1 added, $2 already listed, $3 invalid"
+  },
+  "settings": {
+    "message": "Settings"
+  },
+  "proxyServer": {
+    "message": "Proxy server"
+  },
+  "proxyType": {
+    "message": "Type"
+  },
+  "proxyHost": {
+    "message": "Host"
+  },
+  "proxyPort": {
+    "message": "Port"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "proxySaved": {
+    "message": "Saved: $1"
+  },
+  "proxyInvalidHost": {
+    "message": "Invalid host: enter a domain name or IP address"
+  },
+  "proxyInvalidPort": {
+    "message": "Invalid port: enter a number from 1 to 65535"
+  },
+  "webRtcBlock": {
+    "message": "Block direct WebRTC"
+  },
+  "webRtcHint": {
+    "message": "Pages cannot learn your real IP through WebRTC. Applies to all sites; calls on direct sites may be affected."
+  },
+  "webRtcControlled": {
+    "message": "Another extension controls the WebRTC setting, so this switch is not in effect."
+  }
+}

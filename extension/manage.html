@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="manageTitle"></title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="manage">
+    <main>
+      <header class="page-header">
+        <h1 data-i18n="listHeading"></h1>
+        <span id="list-count" class="count"></span>
+        <div class="header-actions">
+          <button id="import" type="button" class="secondary" data-i18n="import"></button>
+          <button id="export" type="button" class="secondary" data-i18n="export"></button>
+          <input id="import-file" type="file" accept=".txt,text/plain" hidden />
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <form id="add-form" class="add">
+          <input id="add-input" type="text" data-i18n-placeholder="addPlaceholder" autocomplete="off" spellcheck="false" />
+          <button type="submit" data-i18n="add"></button>
+        </form>
+        <input id="filter" type="search" data-i18n-placeholder="search" autocomplete="off" spellcheck="false" />
+      </div>
+      <div id="feedback" class="feedback" aria-live="polite"></div>
+
+      <ul id="domain-list" class="domain-grid"></ul>
+      <div id="list-empty" class="empty" hidden></div>
+
+      <section class="settings">
+        <h2 data-i18n="settings"></h2>
+        <form id="proxy-form" class="setting proxy-setting">
+          <strong data-i18n="proxyServer"></strong>
+          <div class="proxy-fields">
+            <label>
+              <span data-i18n="proxyType"></span>
+              <select id="proxy-scheme">
+                <option value="socks5">SOCKS5</option>
+                <option value="http">HTTP</option>
+              </select>
+            </label>
+            <label class="proxy-host">
+              <span data-i18n="proxyHost"></span>
+              <input id="proxy-host" type="text" autocomplete="off" spellcheck="false" />
+            </label>
+            <label class="proxy-port">
+              <span data-i18n="proxyPort"></span>
+              <input id="proxy-port" type="text" inputmode="numeric" autocomplete="off" />
+            </label>
+            <button type="submit" data-i18n="save"></button>
+          </div>
+          <div id="proxy-feedback" class="feedback" aria-live="polite"></div>
+        </form>
+        <label class="setting">
+          <input id="block-webrtc" type="checkbox" />
+          <span>
+            <strong data-i18n="webRtcBlock"></strong>
+            <small data-i18n="webRtcHint"></small>
+          </span>
+        </label>
+        <div id="webrtc-control" class="banner banner-warn" data-i18n="webRtcControlled" hidden></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" hidden>
+      <span id="toast-text"></span>
+      <button id="toast-undo" type="button" class="link" data-i18n="undo"></button>
+    </div>
+
+    <script type="module" src="manage.js"></script>
+  </body>
+</html>

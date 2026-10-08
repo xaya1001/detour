@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Detour</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="popup">
+    <div id="error-banner" class="banner banner-error" hidden>
+      <strong data-i18n="proxyFailed"></strong>
+      <span id="error-detail"></span>
+    </div>
+    <div id="control-banner" class="banner banner-warn" data-i18n="proxyControlled" hidden></div>
+
+    <section class="modes" role="radiogroup" data-i18n-aria-label="modeLabel">
+      <label><input type="radio" name="mode" value="auto" /> <span data-i18n="modeAuto"></span></label>
+      <label><input type="radio" name="mode" value="global" /> <span data-i18n="modeGlobal"></span></label>
+      <label><input type="radio" name="mode" value="direct" /> <span data-i18n="modeDirect"></span></label>
+    </section>
+
+    <section class="current">
+      <div class="row">
+        <span class="label" data-i18n="currentSite"></span>
+        <span id="current-domain" class="domain">—</span>
+        <span id="current-status" class="tag" hidden></span>
+      </div>
+      <button id="toggle-current" type="button" data-i18n="addToList" disabled></button>
+    </section>
+
+    <section class="page">
+      <div class="row list-header">
+        <span class="label" data-i18n="pageDomains"></span>
+        <span id="page-count" class="count"></span>
+      </div>
+      <ul id="page-list"></ul>
+      <div id="page-empty" class="empty" data-i18n="pageEmpty" hidden></div>
+    </section>
+
+    <section>
+      <button id="open-manage" type="button" class="secondary wide" data-i18n="manageList"></button>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
