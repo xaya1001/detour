@@ -16,6 +16,8 @@ The extension has no runtime dependencies and no build step; the only dev depend
 | `npm run package` | Build `dist/detour-<manifest version>.zip` (`extension/` contents and `LICENSE` at the zip root) | No |
 | `npm run update-psl` | Regenerate `extension/lib/psl-data.js` from publicsuffix.org (network); run `npm test` afterwards | No |
 
+On oracle-arm, heavy local commands take turns on a host lock (`Infrastructure/docs/workspace-agents.md` §4): a new worktree installs dependencies with the host command `worktree-deps` instead of `npm ci` (it hardlinks the canonical checkout's `node_modules` when the lockfile matches), and commands marked Heavy run with the `heavy` prefix, e.g. `heavy npm run check`. CI runs them directly.
+
 Node 22+ (Node 24 locally and in CI). E2E uses `channel: 'chromium'` (new headless supports extensions) with the Chromium build that matches the locked Playwright version.
 
 ## Code map
