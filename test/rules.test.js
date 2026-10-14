@@ -213,3 +213,30 @@ test('locales: English and Simplified Chinese define the same messages', () => {
     assert.deepEqual(placeholders(zh[key].message), placeholders(message), key);
   }
 });
+
+test('host canonicalization rejects malformed addresses and preserves IPv6 and IDNs', () => {
+  assert.equal(normalizeDomain('[garbage]'), null);
+  assert.equal(normalizeDomain('999.999.999.999'), null);
+  assert.equal(normalizeDomain('2001:db8::1'), '[2001:db8::1]');
+  assert.equal(normalizeDomain('[2001:0db8::1]:8080'), '[2001:db8::1]');
+  assert.equal(normalizeDomain('例子.中国'), 'xn--fsqu00a.xn--fiqs8s');
+  assert.equal(normalizeDomain('a'.repeat(64) + '.com'), null);
+  assert.deepEqual(parseProxy({ scheme: 'http', host: '999.999.999.999', port: 80 }), { error: 'host' });
+  assert.deepEqual(parseProxy({ scheme: 'http', host: 'proxy.test/path', port: 80 }), { error: 'host' });
+  assert.deepEqual(parseProxy({ scheme: 'http', host: '*.proxy.test', port: 80 }), { error: 'host' });
+});
+
+test('routing normalizes trailing dots and distinguishes public IPv6 from local addresses', () => {
+  assert.equal(matchesList('WWW.EXAMPLE.COM.', ['example.com']), true);
+  const context = vm.createContext({});
+  vm.runInContext(buildPacScript(['example.com', '[2001:db8::1]'], DEFAULT_PROXY), context);
+  assert.equal(vm.runInContext('FindProxyForURL("https://example.com./", "example.com.")', context), 'SOCKS5 127.0.0.1:12345');
+  assert.equal(vm.runInContext('FindProxyForURL("http://[2001:db8::1]/", "2001:db8::1")', context), 'SOCKS5 127.0.0.1:12345');
+  assert.equal(isProxiedHost('global', [], '[2001:4860:4860::8888]'), true);
+  for (const host of ['[::1]', '[fe80::1]', '[fd12::1]', '169.254.1.1', 'app.localhost']) {
+    assert.equal(isProxiedHost('global', [], host), false, host);
+  }
+  for (const host of ['[::1]', '[fe80::1]', '169.254.1.1', 'app.localhost', '127.0.0.1']) {
+    assert.equal(isProxiedHost('auto', [host], host), false, host);
+  }
+});

@@ -21,6 +21,11 @@ export const STATE_KEYS = Object.freeze(Object.keys(DEFAULT_STATE));
 export const GLOBAL_BYPASS_LIST = Object.freeze([
   'localhost',
   '127.0.0.0/8',
+  '169.254.0.0/16',
+  '[::1]',
+  'fe80::/10',
+  'fc00::/7',
+  '*.localhost',
   '10.0.0.0/8',
   '172.16.0.0/12',
   '192.168.0.0/16',
@@ -37,7 +42,12 @@ export function isIPv4(host) {
 }
 
 export function isIPv6(host) {
-  return host.startsWith('[') && host.endsWith(']');
+  if (!host.startsWith('[') || !host.endsWith(']')) return false;
+  try {
+    return new URL(`http://${host}/`).hostname.startsWith('[');
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -49,23 +59,26 @@ export function normalizeDomain(input) {
   if (typeof input !== 'string') return null;
   let host = input.trim().toLowerCase();
   if (host === '') return null;
-  if (host.includes('://')) {
-    try {
+  try {
+    if (host.includes('://')) {
       const url = new URL(host);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
       host = url.hostname;
-    } catch {
-      return null;
+    } else {
+      host = host.split('/')[0].replace(/^\*\./, '');
+      // A bare IPv6 address is not a hostname followed by a port.
+      if (!host.startsWith('[') && (host.match(/:/g) ?? []).length > 1) host = `[${host}]`;
+      if (/[\s@?#\\]/.test(host)) return null;
+      host = new URL(`http://${host}/`).hostname;
     }
-  } else {
-    host = host.split('/')[0];
-    if (!host.startsWith('[')) host = host.split(':')[0];
+  } catch {
+    return null;
   }
-  host = host.replace(/^\*\./, '').replace(/\.+$/, '');
+  host = host.replace(/\.+$/, '');
   if (host === '') return null;
   if (isIPv4(host) || isIPv6(host)) return host;
   const labels = host.split('.');
-  if (!labels.every((label) => LABEL_RE.test(label))) return null;
+  if (host.length > 253 || !labels.every((label) => label.length <= 63 && LABEL_RE.test(label))) return null;
   return host;
 }
 
@@ -98,7 +111,8 @@ export function mainDomain(host) {
 
 /** List entries that equal host or are a parent of it, i.e. the entries that make host proxied in auto mode. */
 export function coveringEntries(domains, host) {
-  const h = String(host).toLowerCase();
+  const h = normalizeDomain(host);
+  if (h === null) return [];
   return domains.filter((d) => h === d || h.endsWith('.' + d));
 }
 
@@ -147,18 +161,35 @@ export function removeDomain(domains, domain) {
   return domains.filter((d) => d !== domain);
 }
 
-/** Global-mode bypass check mirroring GLOBAL_BYPASS_LIST for request hosts. */
-export function isGlobalBypass(host) {
-  const h = String(host).toLowerCase();
-  if (h === 'localhost' || h.endsWith('.local') || !h.includes('.')) return true;
-  if (isIPv6(h)) return h === '[::1]';
+/** Chrome always bypasses loopback and link-local addresses, including in PAC mode. */
+export function isImplicitBypass(host) {
+  const h = normalizeDomain(host);
+  if (h === null) return false;
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  if (isIPv6(h)) {
+    const first = parseInt(h.slice(1).split(':')[0], 16);
+    return h === '[::1]' || (first & 0xffc0) === 0xfe80;
+  }
   if (!isIPv4(h)) return false;
   const [a, b] = h.split('.').map(Number);
-  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  return a === 127 || (a === 169 && b === 254);
+}
+
+/** Global-mode bypass check mirroring GLOBAL_BYPASS_LIST and Chrome's implicit rules. */
+export function isGlobalBypass(host) {
+  const h = normalizeDomain(host);
+  if (h === null) return false;
+  if (isImplicitBypass(h)) return true;
+  if (isIPv6(h)) return (parseInt(h.slice(1).split(':')[0], 16) & 0xfe00) === 0xfc00;
+  if (h.endsWith('.local') || !h.includes('.')) return true;
+  if (!isIPv4(h)) return false;
+  const [a, b] = h.split('.').map(Number);
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
 /** Whether current rules route this host through the proxy. */
 export function isProxiedHost(mode, domains, host) {
+  if (isImplicitBypass(host)) return false;
   if (mode === 'auto') return matchesList(host, domains);
   if (mode === 'global') return !isGlobalBypass(host);
   return false;
@@ -171,17 +202,13 @@ export function isProxiedHost(mode, domains, host) {
  */
 export function parseProxy(input) {
   if (!PROXY_SCHEMES.includes(input?.scheme)) return { error: 'scheme' };
-  let host = String(input.host ?? '').trim().toLowerCase();
+  if (typeof input.host !== 'string') return { error: 'host' };
+  let host = input.host.trim().toLowerCase();
+  if (/[\s/*@?#\\]/.test(host)) return { error: 'host' };
   if (host.includes(':') && !host.startsWith('[')) host = `[${host}]`;
-  if (isIPv6(host)) {
-    try {
-      host = new URL(`http://${host}/`).hostname;
-    } catch {
-      return { error: 'host' };
-    }
-  } else if (!isIPv4(host) && !host.split('.').every((label) => LABEL_RE.test(label))) {
-    return { error: 'host' };
-  }
+  if (host.includes(':') && !isIPv6(host)) return { error: 'host' };
+  host = normalizeDomain(host);
+  if (host === null) return { error: 'host' };
   const port = String(input.port ?? '').trim();
   if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) return { error: 'port' };
   return { proxy: { scheme: input.scheme, host, port: Number(port) } };
@@ -203,7 +230,8 @@ export function buildPacScript(domains, proxy) {
   return [
     `var DOMAINS = ${list};`,
     'function FindProxyForURL(url, host) {',
-    '  host = host.toLowerCase();',
+    '  host = host.toLowerCase().replace(/\\.+$/, "");',
+    '  if (host.indexOf(":") !== -1 && host.charAt(0) !== "[") host = "[" + host + "]";',
     '  for (var i = 0; i < DOMAINS.length; i++) {',
     '    var d = DOMAINS[i];',
     '    if (host === d || host.length > d.length && host.substring(host.length - d.length - 1) === "." + d) {',

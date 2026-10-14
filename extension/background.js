@@ -69,8 +69,8 @@ function refreshTabBadge(tabId) {
 function sync() {
   enqueue(async () => {
     const state = await readState();
-    await applyProxy(state);
-    await applyWebRtc(state);
+    const results = await Promise.allSettled([applyProxy(state), applyWebRtc(state)]);
+    for (const result of results) if (result.status === 'rejected') console.error(result.reason);
     await updateBadge(state);
   });
 }
@@ -113,116 +113,105 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 chrome.proxy.onProxyError.addListener(() => {
-  recordProxyError();
+  enqueue(recordProxyError);
 });
 
 const PROXY_ERROR_RE = /^net::ERR_(PROXY_|SOCKS_|TUNNEL_CONNECTION_FAILED)/;
 
-// Per-tab page hosts live in storage.session (key page:<tabId>, value {host: {proxied, failed}})
-// so they survive service worker restarts and the popup can read them.
-// Writes for a tab are chained to keep read-modify-write consistent.
-const pageWrites = new Map();
+// Request contexts retain the page generation they started on. Late completions from
+// a previous document cannot repopulate the new page or a closed tab.
+const pages = new Map();
+const requests = new Map();
 
-function updatePage(tabId, mutate) {
-  const prev = pageWrites.get(tabId) ?? Promise.resolve();
-  const next = prev.then(async () => {
-    const key = pageKey(tabId);
-    const hosts = (await chrome.storage.session.get(key))[key] ?? {};
-    if (!mutate(hosts)) return;
-    await chrome.storage.session.set({ [key]: hosts });
-    refreshTabBadge(tabId);
-  });
-  pageWrites.set(tabId, next.catch(() => {}));
-  return next;
+function pageFor(tabId) {
+  if (!pages.has(tabId)) pages.set(tabId, { generation: 0, mainRequest: null, active: true });
+  return pages.get(tabId);
 }
 
-function recordPageHost(tabId, host, proxied, failed) {
-  if (tabId < 0) return;
-  updatePage(tabId, (hosts) => {
-    const entry = hosts[host];
-    const merged = { proxied: Boolean(entry?.proxied || proxied), failed: Boolean(entry?.failed || failed) };
-    if (entry?.proxied === merged.proxied && entry?.failed === merged.failed) return false;
-    hosts[host] = merged;
-    return true;
-  });
+function contextFor(details) {
+  const known = requests.get(details.requestId);
+  if (known) return known;
+  if (details.tabId < 0) return null;
+  const page = pageFor(details.tabId);
+  return { page, generation: page.generation };
 }
 
-// A server redirect fires onBeforeRequest again with the same requestId; only a new
-// main-frame request starts a new page, so hosts along a redirect chain (e.g. login hops) are kept.
-const mainFrameRequest = new Map();
+function isCurrent(context) {
+  return context?.page.active && context.generation === context.page.generation;
+}
+
+async function recordPageHost(details, context, proxied, failed) {
+  if (details.tabId < 0 || !isCurrent(context)) return;
+  const host = hostOf(details.url);
+  if (host === null) return;
+  const key = pageKey(details.tabId);
+  const hosts = (await chrome.storage.session.get(key))[key] ?? {};
+  if (!isCurrent(context)) return;
+  const entry = hosts[host];
+  const merged = { proxied: Boolean(entry?.proxied || proxied), failed: Boolean(entry?.failed || failed) };
+  if (entry?.proxied === merged.proxied && entry?.failed === merged.failed) return;
+  hosts[host] = merged;
+  await chrome.storage.session.set({ [key]: hosts });
+  refreshTabBadge(details.tabId);
+}
 
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
-    if (details.tabId < 0 || mainFrameRequest.get(details.tabId) === details.requestId) return;
-    mainFrameRequest.set(details.tabId, details.requestId);
-    const prev = pageWrites.get(details.tabId) ?? Promise.resolve();
-    pageWrites.set(
-      details.tabId,
-      prev
-        .then(() => chrome.storage.session.remove(pageKey(details.tabId)))
-        .then(() => refreshTabBadge(details.tabId))
-        .catch(() => {}),
-    );
+    if (details.tabId < 0) return;
+    const page = pageFor(details.tabId);
+    // Redirect hops reuse the main-frame request ID.
+    if (details.type === 'main_frame' && page.mainRequest !== details.requestId) {
+      page.mainRequest = details.requestId;
+      page.generation++;
+      enqueue(() => chrome.storage.session.remove(pageKey(details.tabId)));
+    }
+    const context = { page, generation: page.generation };
+    requests.set(details.requestId, context);
+    enqueue(async () => {
+      const state = await readState();
+      context.proxied = isProxiedHost(state.mode, state.domains, hostOf(details.url));
+      await recordPageHost(details, context, context.proxied, false);
+    });
   },
-  { urls: ['<all_urls>'], types: ['main_frame'] },
+  { urls: ['<all_urls>'] },
 );
 
-// Chrome drops a tab's own badge when it loads a new document, so re-apply it on load progress.
-// Pages without web requests (chrome://, file://, extension pages) start with no page hosts.
+// Chrome drops a tab's badge on document loads. Non-web documents have no hosts.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === undefined) return;
   if (changeInfo.status === 'loading' && !/^https?:/.test(tab.url ?? '')) {
-    mainFrameRequest.delete(tabId);
-    updatePage(tabId, (hosts) => {
-      if (Object.keys(hosts).length === 0) return false;
-      for (const host of Object.keys(hosts)) delete hosts[host];
-      return true;
-    });
+    const page = pageFor(tabId);
+    page.generation++;
+    page.mainRequest = null;
+    enqueue(() => chrome.storage.session.remove(pageKey(tabId)));
   }
   refreshTabBadge(tabId);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  pageWrites.delete(tabId);
+  const page = pages.get(tabId);
+  if (page) page.active = false;
+  pages.delete(tabId);
   pendingTabBadges.delete(tabId);
-  mainFrameRequest.delete(tabId);
-  chrome.storage.session.remove(pageKey(tabId));
+  // Run removal after any write already in progress.
+  enqueue(() => chrome.storage.session.remove(pageKey(tabId)));
 });
 
-chrome.webRequest.onBeforeRedirect.addListener(
-  (details) => {
-    readState().then((state) => {
-      const host = hostOf(details.url);
-      if (host !== null) recordPageHost(details.tabId, host, isProxiedHost(state.mode, state.domains, host), false);
-    });
-  },
-  { urls: ['<all_urls>'] },
-);
+function recordRequest(details, outcome) {
+  const context = contextFor(details);
+  if (outcome !== 'redirect') requests.delete(details.requestId);
+  enqueue(async () => {
+    const state = await readState();
+    const host = hostOf(details.url);
+    if (host === null) return;
+    const proxied = context?.proxied ?? isProxiedHost(state.mode, state.domains, host);
+    await recordPageHost(details, context, proxied, outcome === 'error' && isConnectionFailure(details.error));
+    if (outcome === 'error' && proxied && PROXY_ERROR_RE.test(details.error)) await recordProxyError();
+    // Error writes and successes share the same queue, preserving event order.
+    if (outcome === 'complete' && proxied && !details.fromCache && state.lastProxyError !== null) await clearProxyError();
+  });
+}
 
-chrome.webRequest.onErrorOccurred.addListener(
-  (details) => {
-    // Every requested host is listed; only network failures mark it failed (not e.g. ERR_ABORTED,
-    // ERR_BLOCKED_BY_CLIENT or ERR_BLOCKED_BY_ORB).
-    readState().then((state) => {
-      const host = hostOf(details.url);
-      if (host === null) return;
-      const proxied = isProxiedHost(state.mode, state.domains, host);
-      recordPageHost(details.tabId, host, proxied, isConnectionFailure(details.error));
-      if (proxied && PROXY_ERROR_RE.test(details.error)) recordProxyError();
-    });
-  },
-  { urls: ['<all_urls>'] },
-);
-
-chrome.webRequest.onCompleted.addListener(
-  (details) => {
-    readState().then((state) => {
-      const host = hostOf(details.url);
-      if (host === null) return;
-      const proxied = isProxiedHost(state.mode, state.domains, host);
-      recordPageHost(details.tabId, host, proxied, false);
-      if (proxied && !details.fromCache && state.lastProxyError !== null) clearProxyError();
-    });
-  },
-  { urls: ['<all_urls>'] },
-);
+chrome.webRequest.onBeforeRedirect.addListener((details) => recordRequest(details, 'redirect'), { urls: ['<all_urls>'] });
+chrome.webRequest.onErrorOccurred.addListener((details) => recordRequest(details, 'error'), { urls: ['<all_urls>'] });
+chrome.webRequest.onCompleted.addListener((details) => recordRequest(details, 'complete'), { urls: ['<all_urls>'] });

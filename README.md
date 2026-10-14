@@ -34,6 +34,8 @@ Detour does not intercept requests; routing is handled by Chrome's own proxy set
 
 To update, unzip the new version over the same folder and click the reload button on the Detour card in `chrome://extensions`. Your list and settings are kept.
 
+Chrome always connects directly to loopback and link-local addresses, including in Auto mode. Global mode also bypasses private IPv4 and IPv6 LAN addresses.
+
 Chrome lets only one extension control the proxy at a time. If the popup says another extension controls the proxy settings, disable the other proxy extension.
 
 ## Badge
