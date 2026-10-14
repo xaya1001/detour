@@ -1,3 +1,4 @@
+import { updateDomains } from './lib/domain-store.js';
 import { formatTime, localizePage, t } from './lib/i18n.js';
 import { STATE_KEYS, addDomain, coveringEntries, formatProxy, isProxiedHost, mainDomain, normalizeDomain, sanitizeState, summarizePageHosts } from './lib/rules.js';
 
@@ -56,7 +57,7 @@ function renderCurrent() {
     el.currentStatus.textContent = t(proxied ? 'statusProxied' : 'statusDirect');
     el.currentStatus.className = `tag tag-${proxied ? 'proxy' : 'direct'}`;
   }
-  const listed = domain !== null && coveringEntries(state.domains, domain).length > 0;
+  const listed = domain !== null && coveringEntries(state.domains, currentHost).length > 0;
   el.toggleCurrent.disabled = domain === null;
   el.toggleCurrent.textContent = t(listed ? 'removeFromList' : 'addToList');
   el.toggleCurrent.classList.toggle('secondary', listed);
@@ -76,12 +77,14 @@ function renderPage() {
       if (g.proxied) tags.append(tag(t('statusProxied'), 'proxy'));
       if (g.direct) tags.append(tag(t('statusDirect'), 'direct'));
       li.append(name, tags);
-      if (coveringEntries(state.domains, g.domain).length === 0) {
+      const uncovered = Object.keys(pageHosts).some((host) =>
+        mainDomain(host) === g.domain && coveringEntries(state.domains, host).length === 0);
+      if (uncovered) {
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'small';
         add.textContent = t('addShort');
-        add.addEventListener('click', () => saveDomains(addDomain(state.domains, g.domain).domains));
+        add.addEventListener('click', () => saveDomains((domains) => addDomain(domains, g.domain)));
         li.append(add);
       }
       return li;
@@ -101,10 +104,10 @@ function render() {
   renderPage();
 }
 
-async function saveDomains(domains) {
+async function saveDomains(change) {
+  const { domains } = await updateDomains(change);
   state = { ...state, domains };
   render();
-  await chrome.storage.local.set({ domains });
 }
 
 for (const input of el.modeInputs) {
@@ -118,8 +121,12 @@ for (const input of el.modeInputs) {
 el.toggleCurrent.addEventListener('click', () => {
   const domain = mainDomain(currentHost);
   if (domain === null) return;
-  const covering = coveringEntries(state.domains, domain);
-  saveDomains(covering.length > 0 ? state.domains.filter((d) => !covering.includes(d)) : addDomain(state.domains, domain).domains);
+  saveDomains((domains) => {
+    const covering = coveringEntries(domains, currentHost);
+    return covering.length > 0
+      ? { domains: domains.filter((d) => !covering.includes(d)) }
+      : addDomain(domains, domain);
+  });
 });
 
 el.openManage.addEventListener('click', async () => {

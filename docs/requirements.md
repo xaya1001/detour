@@ -22,6 +22,7 @@ Users run a proxy program on their machine or LAN (GOST, Clash, v2rayN, …) tha
 
 - Three modes, Auto, Global and Direct, switched in the popup; the current mode is recognizable in the popup and on the icon.
 - Badge priority: the proxy failure mark first; then, in Auto mode, the current tab's uncovered domain count; Global and Direct modes show no count.
+- Local addresses: Chrome’s implicit loopback and link-local bypass applies in every mode. Global mode also bypasses private IPv4 and IPv6 LAN addresses.
 - Proxy: one proxy server, type SOCKS5 or HTTP, host a domain name, IPv4 or IPv6 address, port 1–65535, set on the proxy list page; SOCKS5 `127.0.0.1:12345` when not set. Proxied hostnames are resolved by the proxy, with no local DNS lookup. The proxy failure message shows the current proxy address.
 - Popup: mode switch, whether the current site is proxied, add or remove the current site, domains on this page, open the proxy list page.
 - Domains on this page: grouped by registrable domain; every domain the current tab requested since it was last opened, with its state (Proxied, Direct, Failed), including domains passed through on redirects (such as login hops); failed ones first; domains not covered by the list can be added in one click. Failed means the request ended in a network error; pending requests are not shown as failed. Cleared when the page is reloaded or navigates to a new page; not kept after the tab closes or the browser restarts.

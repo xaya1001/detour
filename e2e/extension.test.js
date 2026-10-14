@@ -100,7 +100,16 @@ test('extension runtime in Chromium', async (t) => {
   const httpSeen = [];
   const httpProxy = await startHttpProxy(port, httpSeen);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'detour-e2e-'));
-  const context = await chromium.launchPersistentContext(profile, {
+  let context;
+  t.after(async () => {
+    await context?.close();
+    socks.kill();
+    httpProxy.closeAllConnections();
+    httpProxy.close();
+    site.close();
+    fs.rmSync(profile, { recursive: true, force: true });
+  });
+  context = await chromium.launchPersistentContext(profile, {
     channel: 'chromium',
     headless: true,
     acceptDownloads: true,
@@ -110,14 +119,6 @@ test('extension runtime in Chromium', async (t) => {
       '--host-resolver-rules=MAP *.direct.test 127.0.0.1, MAP direct.test 127.0.0.1',
       '--lang=en-US',
     ],
-  });
-  t.after(async () => {
-    await context.close();
-    socks.kill();
-    httpProxy.closeAllConnections();
-    httpProxy.close();
-    site.close();
-    fs.rmSync(profile, { recursive: true, force: true });
   });
 
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
@@ -157,7 +158,7 @@ test('extension runtime in Chromium', async (t) => {
     await visit('www.proxied.test', '/assets');
     const hosts = await waitFor(async () => {
       const h = await pageHosts();
-      return h['cdn.fail.test'] && h['cdn.direct.test'] ? h : null;
+      return h['cdn.fail.test']?.failed && h['cdn.direct.test'] ? h : null;
     }, 'page hosts not recorded');
     assert.deepEqual(hosts['www.proxied.test'], { proxied: true, failed: false });
     assert.deepEqual(hosts['cdn.direct.test'], { proxied: false, failed: false });
@@ -243,7 +244,7 @@ test('extension runtime in Chromium', async (t) => {
     const domains = async () => (await ev(() => chrome.storage.local.get('domains'))).domains;
     await manage.fill('#add-input', 'https://Docs.Example.org/x');
     await manage.press('#add-input', 'Enter');
-    assert.equal(await manage.textContent('#feedback'), 'Added docs.example.org');
+    await waitFor(async () => (await manage.textContent('#feedback')) === 'Added docs.example.org', 'add feedback not shown');
     await manage.fill('#add-input', 'bad domain');
     await manage.press('#add-input', 'Enter');
     assert.equal(await manage.textContent('#feedback'), 'Invalid domain');
@@ -261,7 +262,78 @@ test('extension runtime in Chromium', async (t) => {
     fs.writeFileSync(importFile, '# backup\r\nproxied.test\r\nnew.example.com\r\n???\r\n');
     await manage.setInputFiles('#import-file', importFile);
     await waitFor(async () => (await domains()).includes('new.example.com'), 'import not merged');
-    assert.equal(await manage.textContent('#feedback'), 'Import done: 1 added, 1 already listed, 1 invalid');
+    await waitFor(async () => (await manage.textContent('#feedback')) === 'Import done: 1 added, 1 already listed, 1 invalid', 'import feedback not shown');
+  });
+
+  await t.test('current-site removal uses the actual host when only a subdomain is listed', async () => {
+    const original = (await ev(() => chrome.storage.local.get('domains'))).domains;
+    await setState({ domains: ['mail.example.com'] });
+    const popup = await context.newPage();
+    await popup.addInitScript(() => {
+      chrome.tabs.query = async () => [{ id: 999999, url: 'https://mail.example.com/' }];
+      chrome.storage.session.get = async () => ({ 'page:999999': { 'mail.example.com': { proxied: true, failed: false } } });
+    });
+    await popup.goto(`chrome-extension://${extensionId}/popup.html`);
+    try {
+      await popup.waitForFunction(() => document.getElementById('current-status').textContent === 'Proxied');
+      assert.equal(await popup.textContent('#toggle-current'), 'Remove from proxy list');
+      assert.equal(await popup.locator('#page-list button').count(), 0);
+      await popup.click('#toggle-current');
+      await waitFor(async () => (await ev(() => chrome.storage.local.get('domains'))).domains.length === 0, 'covering subdomain not removed');
+    } finally {
+      await popup.close();
+      await setState({ domains: original });
+    }
+  });
+
+  await t.test('an import merges into the latest list after asynchronous file reading', async () => {
+    const manage = context.pages().find((p) => p.url().endsWith('manage.html'));
+    const original = (await ev(() => chrome.storage.local.get('domains'))).domains;
+    await manage.evaluate(() => {
+      window.originalFileText = File.prototype.text;
+      File.prototype.text = () => new Promise((resolve) => { window.finishImport = resolve; });
+    });
+    try {
+      await manage.setInputFiles('#import-file', { name: 'merge.txt', mimeType: 'text/plain', buffer: Buffer.from('imported.example') });
+      await manage.waitForFunction(() => typeof window.finishImport === 'function');
+      await manage.fill('#add-input', 'added-while-reading.example');
+      await manage.press('#add-input', 'Enter');
+      await waitFor(async () => (await ev(() => chrome.storage.local.get('domains'))).domains.includes('added-while-reading.example'), 'concurrent add not saved');
+      await manage.evaluate(() => window.finishImport('imported.example'));
+      await waitFor(async () => (await ev(() => chrome.storage.local.get('domains'))).domains.includes('imported.example'), 'import not saved');
+      assert.ok((await ev(() => chrome.storage.local.get('domains'))).domains.includes('added-while-reading.example'));
+    } finally {
+      await manage.evaluate(() => { File.prototype.text = window.originalFileText; });
+      await setState({ domains: original });
+    }
+  });
+
+  await t.test('two list pages preserve simultaneous additions', async () => {
+    const first = context.pages().find((p) => p.url().endsWith('manage.html'));
+    const second = await context.newPage();
+    await second.goto(`chrome-extension://${extensionId}/manage.html`);
+    const original = (await ev(() => chrome.storage.local.get('domains'))).domains;
+    try {
+      await first.evaluate(() => {
+        navigator.locks.request('detour-domains', () => new Promise((resolve) => { window.releaseListLock = resolve; }));
+      });
+      await first.waitForFunction(() => typeof window.releaseListLock === 'function');
+      await first.fill('#add-input', 'first.concurrent.test');
+      await second.fill('#add-input', 'second.concurrent.test');
+      await Promise.all([
+        first.evaluate(() => document.getElementById('add-form').requestSubmit()),
+        second.evaluate(() => document.getElementById('add-form').requestSubmit()),
+      ]);
+      await first.evaluate(() => window.releaseListLock());
+      await waitFor(async () => {
+        const { domains } = await ev(() => chrome.storage.local.get('domains'));
+        return domains.includes('first.concurrent.test') && domains.includes('second.concurrent.test');
+      }, 'concurrent additions overwrote each other');
+    } finally {
+      await first.evaluate(() => window.releaseListLock?.());
+      await second.close();
+      await setState({ domains: original });
+    }
   });
 
   await t.test('proxy settings: invalid input is rejected, an HTTP proxy routes auto and global traffic', async () => {

@@ -1,3 +1,4 @@
+import { updateDomains } from './lib/domain-store.js';
 import { localizePage, t } from './lib/i18n.js';
 import { addDomain, exportDomains, formatProxy, importDomains, parseProxy, removeDomain, sanitizeState } from './lib/rules.js';
 
@@ -95,10 +96,11 @@ function render() {
   highlight = null;
 }
 
-async function save(next) {
-  domains = next;
+async function save(change) {
+  const result = await updateDomains(change);
+  domains = result.domains;
   render();
-  await chrome.storage.local.set({ domains });
+  return result;
 }
 
 function remove(domain) {
@@ -107,7 +109,7 @@ function remove(domain) {
   el.toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, UNDO_MS);
-  save(removeDomain(domains, domain));
+  save((latest) => ({ domains: removeDomain(latest, domain) }));
 }
 
 function hideToast() {
@@ -118,24 +120,26 @@ function hideToast() {
 el.toastUndo.addEventListener('click', () => {
   if (undoDomain === null) return;
   highlight = undoDomain;
-  save(addDomain(domains, undoDomain).domains);
+  const restoring = undoDomain;
+  save((latest) => addDomain(latest, restoring));
   clearTimeout(toastTimer);
   hideToast();
 });
 
-el.addForm.addEventListener('submit', (event) => {
+el.addForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (el.addInput.value.trim() === '') return;
-  const result = addDomain(domains, el.addInput.value);
-  if (result.domain === null) {
+  const input = el.addInput.value;
+  const parsed = addDomain([], input);
+  if (parsed.domain === null) {
     showFeedback(t('domainInvalid'), 'error');
     return;
   }
   el.addInput.value = '';
+  const result = await save((latest) => addDomain(latest, input));
   highlight = result.domain;
   showFeedback(t(result.added ? 'domainAdded' : 'domainListed', result.domain), result.added ? 'ok' : 'muted');
-  if (result.added) save(result.domains);
-  else render();
+  render();
 });
 
 el.addInput.addEventListener('input', () => showFeedback('', ''));
@@ -156,12 +160,12 @@ el.importFile.addEventListener('change', async () => {
   const [file] = el.importFile.files;
   el.importFile.value = '';
   if (!file) return;
-  const result = importDomains(domains, await file.text());
+  const text = await file.text();
+  const result = await save((latest) => importDomains(latest, text));
   showFeedback(
     t('imported', result.added, result.existing, result.invalid),
     result.added > 0 ? 'ok' : 'muted',
   );
-  if (result.added > 0) save(result.domains);
 });
 
 el.proxyForm.addEventListener('submit', async (event) => {
