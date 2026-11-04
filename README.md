@@ -51,7 +51,7 @@ Chrome lets only one extension control the proxy at a time. If the popup says an
 
 ## Development
 
-Requires Node.js 22+. The extension itself has no dependencies and no build step; Playwright is used only for end-to-end tests.
+Requires Node.js 26+. The extension itself has no dependencies and no build step; Playwright is used only for end-to-end tests.
 
 ```sh
 npm ci

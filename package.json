@@ -13,7 +13,7 @@
     "update-psl": "node scripts/update-psl.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=26"
   },
   "devDependencies": {
     "playwright": "1.63.0"
