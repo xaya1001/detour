@@ -14,6 +14,7 @@ If you run a local proxy (GOST, Clash, v2rayN, sing-box, …) and only want "the
 ## Features
 
 - **Three modes**: Auto (listed domains and all their subdomains use the proxy), Global (everything except localhost and LAN addresses), Direct.
+- **Direct-mode confirmation**: opening a listed site asks whether to switch to Auto or allow direct access for that list entry in this tab, until you close the tab, switch modes or restart Chrome.
 - **SOCKS5 or HTTP proxy**, set on the options page. Default: SOCKS5 `127.0.0.1:12345`. Proxied hostnames are resolved by the proxy, not locally.
 - **One-click add**: the popup shows whether the current site is proxied and adds or removes its registrable domain (`mail.google.com` → `google.com`, `www.google.com.hk` → `google.com.hk`, using the Public Suffix List).
 - **Domains on this page**: every domain the page requested, marked Proxied, Direct or Failed, each with an Add button. Useful for catching the CDN or API domain that keeps a site from loading.
@@ -23,7 +24,7 @@ If you run a local proxy (GOST, Clash, v2rayN, sing-box, …) and only want "the
 - **Block direct WebRTC** (optional): keeps pages from learning your real IP through WebRTC.
 - English and Simplified Chinese UI, following the browser language.
 
-Detour does not intercept requests; routing is handled by Chrome's own proxy settings (a PAC script or fixed servers), so it adds no measurable delay to page loads. Everything stays in your browser: no accounts, no sync, no network calls of its own.
+Chrome handles routing through its own proxy settings (a PAC script or fixed servers) and shows the confirmation page for listed top-level destinations in Direct mode. Everything stays in your browser: no accounts, no sync, no network calls of its own.
 
 ## Install
 

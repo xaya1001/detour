@@ -1,5 +1,5 @@
 import { t } from './lib/i18n.js';
-import { STATE_KEYS, badgeFor, buildProxyConfig, isConnectionFailure, isProxiedHost, sanitizeState } from './lib/rules.js';
+import { STATE_KEYS, badgeFor, buildDirectAllowRule, buildDirectConfirmRules, buildProxyConfig, coveringEntries, isConnectionFailure, isProxiedHost, sanitizeState } from './lib/rules.js';
 
 async function readState() {
   return sanitizeState(await chrome.storage.local.get([...STATE_KEYS]));
@@ -10,12 +10,25 @@ async function readState() {
 let queue = Promise.resolve();
 
 function enqueue(task) {
-  queue = queue.then(task).catch((error) => console.error(error));
+  const result = queue.then(task);
+  queue = result.catch((error) => console.error(error));
+  return result;
 }
 
 async function applyProxy(state) {
   const value = buildProxyConfig(state);
   await chrome.proxy.settings.set({ value, scope: 'regular' });
+}
+
+async function applyDirectConfirm(state, clearAllowances) {
+  await chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [1],
+    addRules: buildDirectConfirmRules(state, chrome.runtime.getURL('confirm.html')),
+  });
+  if (clearAllowances) {
+    const rules = await chrome.declarativeNetRequest.getSessionRules();
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: rules.map((rule) => rule.id) });
+  }
 }
 
 // On: WebRTC may only use proxied connections (SOCKS5 has no UDP, so it falls back to proxied TCP
@@ -66,10 +79,10 @@ function refreshTabBadge(tabId) {
   });
 }
 
-function sync() {
+function sync(clearAllowances = false) {
   enqueue(async () => {
     const state = await readState();
-    const results = await Promise.allSettled([applyProxy(state), applyWebRtc(state)]);
+    const results = await Promise.allSettled([applyProxy(state), applyWebRtc(state), applyDirectConfirm(state, clearAllowances)]);
     for (const result of results) if (result.status === 'rejected') console.error(result.reason);
     await updateBadge(state);
   });
@@ -106,10 +119,40 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (['mode', 'domains', 'proxy', 'blockWebRtc'].some((key) => key in changes)) {
-    sync();
+    sync('mode' in changes);
   } else if ('lastProxyError' in changes) {
     refreshBadge();
   }
+});
+
+// The destination comes from our confirmation document, never from a message-supplied URL.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== 'confirm-direct' || !['auto', 'direct'].includes(message.action)) return;
+  const prefix = chrome.runtime.getURL('confirm.html') + '#';
+  if (!sender.tab || !sender.url?.startsWith(prefix)) return;
+  enqueue(async () => {
+    const target = new URL(sender.url.slice(prefix.length));
+    const state = await readState();
+    const entries = coveringEntries(state.domains, target.hostname);
+    if (!['http:', 'https:'].includes(target.protocol) || state.mode !== 'direct' || entries.length === 0) {
+      return { ok: false };
+    }
+    if (message.action === 'auto') {
+      state.mode = 'auto';
+      await chrome.storage.local.set({ mode: 'auto' });
+      // Wait for both routing and the guard before opening the destination.
+      await Promise.all([applyProxy(state), applyDirectConfirm(state, true)]);
+    } else {
+      const rules = await chrome.declarativeNetRequest.getSessionRules();
+      const previous = rules.find((rule) => rule.condition.tabIds.includes(sender.tab.id));
+      const domains = [...new Set([...(previous?.condition.requestDomains ?? []), ...entries])];
+      const rule = buildDirectAllowRule(sender.tab.id, domains);
+      await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [rule.id], addRules: [rule] });
+    }
+    await chrome.tabs.update(sender.tab.id, { url: target.href });
+    return { ok: true };
+  }).then(sendResponse, () => sendResponse({ ok: false }));
+  return true;
 });
 
 chrome.proxy.onProxyError.addListener(() => {
@@ -194,7 +237,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   pages.delete(tabId);
   pendingTabBadges.delete(tabId);
   // Run removal after any write already in progress.
-  enqueue(() => chrome.storage.session.remove(pageKey(tabId)));
+  enqueue(async () => {
+    await chrome.storage.session.remove(pageKey(tabId));
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [tabId + 1] });
+  });
 });
 
 function recordRequest(details, outcome) {

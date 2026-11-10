@@ -13,8 +13,9 @@ import { chromium } from 'playwright';
 const EXTENSION = path.resolve(import.meta.dirname, '../extension');
 const SOCKS_PORT = 12345;
 
-function startSite() {
+function startSite(hits) {
   const server = http.createServer((req, res) => {
+    hits.push(`${req.headers.host}${req.url}`);
     const port = server.address().port;
     if (req.url === '/redirect') {
       res.writeHead(302, { Location: `http://landing.direct.test:${port}/` });
@@ -23,6 +24,10 @@ function startSite() {
     if (req.url === '/assets') {
       res.writeHead(200, { 'content-type': 'text/html' });
       return res.end(`<img src="http://cdn.direct.test:${port}/a.png"><img src="http://cdn.fail.test/a.png">`);
+    }
+    if (req.url === '/guard-assets') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<img src="http://image.listed.direct.test:${port}/image"><iframe src="http://frame.listed.direct.test:${port}/frame"></iframe>`);
     }
     // nosniff HTML: Chrome's opaque response blocking rejects it when loaded as an image,
     // so the cdn.direct.test image request ends in net::ERR_BLOCKED_BY_ORB, not a network failure.
@@ -93,7 +98,8 @@ async function waitFor(check, message) {
 }
 
 test('extension runtime in Chromium', async (t) => {
-  const site = await startSite();
+  const hits = [];
+  const site = await startSite(hits);
   const port = site.address().port;
   const seen = [];
   let socks = await startSocks(port, seen);
@@ -208,8 +214,75 @@ test('extension runtime in Chromium', async (t) => {
     await setState({ mode: 'direct' });
     seen.length = 0;
     await visit('www.proxied.test');
+    assert.ok(page.url().startsWith(`chrome-extension://${extensionId}/confirm.html#`));
     assert.deepEqual(seen, []);
     assert.equal(await badge(), '');
+  });
+
+  await t.test('Direct confirmation opens directly for this tab and entry only, or switches to Auto', async () => {
+    await setState({ domains: ['listed.direct.test', 'another.direct.test', '127.0.0.1', '[::1]'] });
+    await visit('other.direct.test');
+    assert.ok(page.url().startsWith('http://other.direct.test:'));
+    await visit('other.direct.test', '/guard-assets');
+    assert.ok(hits.includes(`image.listed.direct.test:${port}/image`));
+    assert.ok(hits.includes(`frame.listed.direct.test:${port}/frame`));
+
+    const pathname = '/path?q=one%20two&nested=%23value#section';
+    const target = `http://sub.listed.direct.test:${port}${pathname}`;
+    seen.length = 0;
+    hits.length = 0;
+    await page.goto(target);
+    assert.equal(page.url(), `chrome-extension://${extensionId}/confirm.html#${target}`);
+    assert.equal(await page.textContent('#target-host'), 'sub.listed.direct.test');
+    assert.equal(await page.textContent('#target-url'), target);
+    assert.ok(!hits.some((hit) => hit.startsWith(`sub.listed.direct.test:${port}/`)), 'destination must not be requested before confirmation');
+    await page.click('#open-direct');
+    await page.waitForURL(target);
+    await page.waitForLoadState();
+    assert.ok(hits.includes(`sub.listed.direct.test:${port}/path?q=one%20two&nested=%23value`));
+    await visit('sibling.listed.direct.test');
+    assert.ok(page.url().startsWith('http://sibling.listed.direct.test:'));
+    await page.reload();
+    assert.ok(page.url().startsWith('http://sibling.listed.direct.test:'));
+    assert.deepEqual(seen, []);
+    await visit('another.direct.test');
+    assert.ok(page.url().startsWith(`chrome-extension://${extensionId}/confirm.html#`));
+    await page.click('#go-back');
+    await page.waitForURL(`http://sibling.listed.direct.test:${port}/`);
+
+    const other = await context.newPage();
+    try {
+      await other.goto(target);
+      assert.ok(other.url().startsWith(`chrome-extension://${extensionId}/confirm.html#`));
+      const tabId = await other.evaluate(async () => (await chrome.tabs.getCurrent()).id);
+      await other.click('#open-direct');
+      await other.waitForURL(target);
+      assert.ok((await ev(() => chrome.declarativeNetRequest.getSessionRules())).some((r) => r.condition.tabIds.includes(tabId)));
+      await other.close();
+      await waitFor(async () => !(await ev(() => chrome.declarativeNetRequest.getSessionRules())).some((r) => r.condition.tabIds.includes(tabId)), 'closed-tab allowance not removed');
+    } finally {
+      if (!other.isClosed()) await other.close();
+    }
+
+    await setState({ mode: 'global' });
+    await setState({ mode: 'direct' });
+    await page.goto(target);
+    assert.ok(page.url().startsWith(`chrome-extension://${extensionId}/confirm.html#`), 'mode switch must revoke allowance');
+
+    for (const host of ['127.0.0.1', '[::1]']) {
+      await visit(host);
+      assert.ok(page.url().startsWith(`chrome-extension://${extensionId}/confirm.html#`), `${host} must be guarded`);
+      assert.equal(await page.textContent('#target-host'), host);
+    }
+    await page.goto(target);
+    await page.click('#open-auto');
+    await page.waitForURL(target);
+    await page.waitForLoadState();
+    assert.equal((await ev(() => chrome.storage.local.get('mode'))).mode, 'auto');
+    assert.ok(seen.includes('sub.listed.direct.test'));
+    await visit('sibling.listed.direct.test');
+    assert.ok(page.url().startsWith('http://sibling.listed.direct.test:'));
+    await setState({ domains: ['proxied.test'] });
   });
 
   await t.test('proxy failure shows the error badge and a proxied success clears it', async () => {

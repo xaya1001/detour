@@ -482,3 +482,30 @@ button.link {
 .proxy-setting .feedback:empty {
   display: none;
 }
+
+/* Direct-mode confirmation tab */
+body.confirm {
+  padding: 48px 16px;
+  font-size: 14px;
+}
+
+.confirm main {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.confirm #target-url {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.confirm button {
+  font-weight: 500;
+}

@@ -121,6 +121,27 @@ export function matchesList(host, domains) {
   return coveringEntries(domains, host).length > 0;
 }
 
+/** One browser-owned redirect for listed top-level HTTP(S) navigations in Direct mode. */
+export function buildDirectConfirmRules({ mode, domains }, confirmUrl) {
+  if (mode !== 'direct' || domains.length === 0) return [];
+  return [{
+    id: 1,
+    priority: 1,
+    action: { type: 'redirect', redirect: { regexSubstitution: `${confirmUrl}#\\1` } },
+    condition: { regexFilter: '^(https?://.*)$', requestDomains: [...domains], resourceTypes: ['main_frame'] },
+  }];
+}
+
+/** A tab may directly revisit the list entries it confirmed, including their subdomains. */
+export function buildDirectAllowRule(tabId, domains) {
+  return {
+    id: tabId + 1,
+    priority: 2,
+    action: { type: 'allow' },
+    condition: { tabIds: [tabId], requestDomains: [...domains], resourceTypes: ['main_frame'] },
+  };
+}
+
 /** Add a domain to the list without duplicates; returns the new list (or the same list). */
 export function addDomain(domains, input) {
   const domain = normalizeDomain(input);
