@@ -106,6 +106,8 @@ test('extension runtime in Chromium', async (t) => {
   const httpSeen = [];
   const httpProxy = await startHttpProxy(port, httpSeen);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'detour-e2e-'));
+  fs.mkdirSync(path.join(profile, 'Default'));
+  fs.writeFileSync(path.join(profile, 'Default', 'Preferences'), JSON.stringify({ search: { suggest_enabled: false } }));
   let context;
   t.after(async () => {
     await context?.close();
