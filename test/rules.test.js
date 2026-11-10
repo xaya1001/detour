@@ -7,6 +7,8 @@ import {
   DEFAULT_PROXY,
   addDomain,
   badgeFor,
+  buildDirectAllowRule,
+  buildDirectConfirmRules,
   coveringEntries,
   buildPacScript,
   buildProxyConfig,
@@ -21,6 +23,35 @@ import {
   sanitizeState,
   summarizePageHosts,
 } from '../extension/lib/rules.js';
+
+test('Direct confirmation redirects only listed main-frame requests and preserves the destination', () => {
+  const domains = ['example.com', '127.0.0.1', '[::1]'];
+  const confirmUrl = 'chrome-extension://detour/confirm.html';
+  assert.deepEqual(buildDirectConfirmRules({ mode: 'auto', domains }, confirmUrl), []);
+  assert.deepEqual(buildDirectConfirmRules({ mode: 'global', domains }, confirmUrl), []);
+  assert.deepEqual(buildDirectConfirmRules({ mode: 'direct', domains: [] }, confirmUrl), []);
+  const [rule] = buildDirectConfirmRules({ mode: 'direct', domains }, confirmUrl);
+  assert.deepEqual(rule.condition.requestDomains, domains);
+  assert.deepEqual(rule.condition.resourceTypes, ['main_frame']);
+  assert.equal(rule.action.type, 'redirect');
+  const pattern = new RegExp(rule.condition.regexFilter);
+  for (const url of ['https://sub.example.com/path?q=a%20b&x=1', 'http://127.0.0.1:8080/', 'http://[::1]/']) {
+    const match = pattern.exec(url);
+    assert.equal(match[1], url);
+    assert.equal(rule.action.redirect.regexSubstitution.replace('\\1', match[1]), `${confirmUrl}#${url}`);
+  }
+  assert.equal(pattern.test('ftp://example.com/'), false);
+});
+
+test('Direct allowance is scoped to a tab and the confirmed list entries', () => {
+  const domains = coveringEntries(['example.com', 'mail.example.com', 'other.test'], 'mail.example.com');
+  const allow = buildDirectAllowRule(7, domains);
+  assert.deepEqual(allow.condition, { tabIds: [7], requestDomains: ['example.com', 'mail.example.com'], resourceTypes: ['main_frame'] });
+  assert.equal(allow.action.type, 'allow');
+  const [redirect] = buildDirectConfirmRules({ mode: 'direct', domains }, 'chrome-extension://detour/confirm.html');
+  assert.ok(allow.priority > redirect.priority);
+  assert.notEqual(allow.id, buildDirectAllowRule(8, domains).id);
+});
 
 test('normalizeDomain and mainDomain: registrable domain per public suffix list, IP as-is, invalid rejected', () => {
   assert.equal(normalizeDomain(' Mail.Google.COM. '), 'mail.google.com');

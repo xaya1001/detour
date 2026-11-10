@@ -166,5 +166,20 @@
   },
   "webRtcControlled": {
     "message": "Another extension controls the WebRTC setting, so this switch is not in effect."
+  },
+  "confirmTitle": {
+    "message": "Open a listed site directly?"
+  },
+  "confirmAuto": {
+    "message": "Switch to Auto and open"
+  },
+  "confirmDirect": {
+    "message": "Open directly anyway"
+  },
+  "confirmBack": {
+    "message": "Go back"
+  },
+  "confirmUnavailable": {
+    "message": "Could not open this address. Try opening it again."
   }
 }

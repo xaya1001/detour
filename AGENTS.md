@@ -24,15 +24,16 @@ Node 26+ (Node 26 locally and in CI). E2E uses `channel: 'chromium'` (new headle
 
 ```text
 extension/
-  manifest.json      MV3 manifest; permissions proxy, privacy, storage, webRequest; host_permissions <all_urls>; default_locale en
+  manifest.json      MV3 manifest; permissions proxy, privacy, storage, webRequest, declarativeNetRequestWithHostAccess; host_permissions <all_urls>; default_locale en; confirm.html is web-accessible
   _locales/          en and zh_CN messages.json (same keys and placeholders, checked by a unit test)
   lib/psl-data.js    Generated Public Suffix List rules (written only by scripts/update-psl.js)
-  lib/rules.js       Pure logic, no Chrome APIs: normalization, registrable domain, list matching, proxy validation, PAC, per-mode proxy config, global bypass, state sanitizing, badge
+  lib/rules.js       Pure logic, no Chrome APIs: normalization, registrable domain, list matching, proxy validation, PAC, per-mode proxy config, Direct confirmation/allow rules, global bypass, state sanitizing, badge
   lib/domain-store.js Cross-page domain mutations under a Web Lock, always reading fresh storage
   lib/i18n.js        chrome.i18n wrapper: t(), formatTime(), localizePage() fills data-i18n* attributes
   background.js      Service worker: storage -> chrome.proxy.settings.set; badges; passive onProxyError / webRequest listeners for the failure mark and page domains
   popup.html/js      Popup: mode switch, current site and add/remove, page domains, open the list page, failure and "controlled by another extension" banners
   manage.html/js     Proxy list page (options_ui, opens in a tab): sorted list, search, add, remove with undo, import/export, proxy server, WebRTC switch
+  confirm.html/js    Direct-mode confirmation: destination, Auto/direct actions, back (requirements: Core scenarios 6)
   ui.css             Shared styles
   icons/             16/48/128 PNG
 scripts/package.js   Dependency-free zip writer (deflate)
@@ -43,15 +44,17 @@ e2e/                 Offline e2e: local HTTP site + SOCKS5 stub on 127.0.0.1:123
 docs/images/         README screenshots
 ```
 
-Dependencies point one way: `background.js`, `popup.js`, `manage.js` → `lib/i18n.js`, `lib/rules.js` → `lib/psl-data.js`; the UI pages also use `lib/domain-store.js` → `lib/rules.js`. UI text lives only in `_locales`; pages and scripts hard-code no text in any language, and `badgeFor` receives an injected `msg` function.
+Dependencies point one way: `confirm.js` → `lib/i18n.js`; `background.js`, `popup.js`, `manage.js` → `lib/i18n.js`, `lib/rules.js` → `lib/psl-data.js`; the UI pages also use `lib/domain-store.js` → `lib/rules.js`. UI text lives only in `_locales`; pages and scripts hard-code no text in any language, and `badgeFor` receives an injected `msg` function.
 
 Fact owners: mode, domain list, proxy and latest failure time live in `chrome.storage.local` (keys in `STATE_KEYS` of `rules.js`: `mode`, `domains`, `proxy`, `lastProxyError`, `blockWebRtc`; `proxy` is `{scheme: 'socks5'|'http', host, port}` and falls back to `DEFAULT_PROXY` when missing or invalid). The popup and list page write domain changes through `domain-store.js`, using a shared Web Lock around fresh read–modify–write; the service worker listens to `storage.onChanged`, reapplies the proxy and refreshes badges, so changes apply immediately without the pages staying open. Page domains, including pending requests, are written by the service worker to `chrome.storage.session` (key `page:<tabId>`, value `{host: {proxied, failed}}`, every host), cleared on a new main-frame request (not on redirects of the same request; hops are recorded via `onBeforeRedirect`) and removed when the tab closes.
+
+Direct confirmation is owned by `chrome.declarativeNetRequest`: one dynamic main-frame redirect rule follows the current Direct-mode list; higher-priority session allow rules hold each tab's confirmed entries. A mode change clears all allowances and closing a tab removes its rule. Session rules survive service-worker suspension and end at browser shutdown. Confirmation actions run in the service worker queue, and Auto routing is applied before opening the destination.
 
 "Covered by the list" means `coveringEntries(domains, host)` is non-empty: the host equals an entry or is a subdomain of one. The popup checks the actual request host (not its registrable parent) for the current-site button (remove deletes every covering entry) and hides "Add" on a page-domain group when all its recorded hosts are covered; a registrable domain can sit under a listed public suffix (`avatars.githubusercontent.com` under `githubusercontent.com`), so exact-entry checks are wrong.
 
 Badges come from `badgeFor` in `rules.js`: the browser-wide badge shows the mode; tabs with page data get their own badge (the uncovered count in Auto mode). Chrome clears a tab's badge when it loads a new document, so `tabs.onUpdated` status changes reapply it; loading a non-http(s) page clears that tab's page data.
 
-Request/page writes, proxy-failure changes, proxy, WebRTC policy (`disable_non_proxied_udp` when `blockWebRtc` is true, otherwise `clear` to restore the default) and badge updates run through one serial queue in the service worker, with settings updates reading fresh storage, so an older state never overwrites a newer one under concurrent events.
+Direct confirmation rules and actions, request/page writes, proxy-failure changes, proxy, WebRTC policy (`disable_non_proxied_udp` when `blockWebRtc` is true, otherwise `clear` to restore the default) and badge updates run through one serial queue in the service worker, with settings updates reading fresh storage, so an older state never overwrites a newer one under concurrent events.
 
 ## Test gates
 
@@ -67,7 +70,7 @@ Request/page writes, proxy-failure changes, proxy, WebRTC policy (`disable_non_p
 - **E2E uses a fixed port**: the default proxy is `127.0.0.1:12345`, so `test:e2e` starts its SOCKS5 stub there; if the port is taken the tests fail, and two runs cannot overlap.
 - **No direct fallback**: PAC returns only `SOCKS5 host:port` or `PROXY host:port`, never with `; DIRECT`; Global mode uses `fixed_servers` + `singleProxy`. This is a requirement (visible failures), not a bug.
 - **No DNS in PAC**: PAC does string operations on `host` only; no `dnsResolve`, `isResolvable`, `isInNet`, `myIpAddress` and the like. Proxied hostnames are resolved by the proxy.
-- **Navigation never waits on the service worker**: Chrome persists the proxy settings. Do not add blocking `webRequest` listeners or `chrome.proxy.onRequest`; the service worker only listens passively and reapplies settings on install, startup and state changes.
+- **Navigation never waits on the service worker**: Chrome persists the proxy settings. Do not add blocking `webRequest` listeners or `chrome.proxy.onRequest`; Direct-mode confirmation uses declarative main-frame rules; webRequest listeners stay passive. The service worker reapplies settings on install, startup and state changes.
 - **Proxy control**: Chrome lets one extension control the proxy. With `levelOfControl` `controlled_by_other_extensions` our settings have no effect and the popup says so.
 - **Public Suffix List**: registrable domains come from `extension/lib/psl-data.js` (generated by `npm run update-psl`, ICANN and PRIVATE sections, punycoded). Never fall back to "last two labels": `google.com.hk` would become `com.hk`, and adding it would proxy the whole suffix. Only the script writes the generated file.
 - **Failure mark**: set by `chrome.proxy.onProxyError` and by `net::ERR_PROXY_*` / `ERR_SOCKS_*` / `ERR_TUNNEL_CONNECTION_FAILED` in `webRequest.onErrorOccurred`; cleared by a non-cached `onCompleted` of a request the current rules proxy. An unreachable HTTP proxy also reports `ERR_PROXY_CONNECTION_FAILED`.

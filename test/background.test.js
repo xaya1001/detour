@@ -29,7 +29,8 @@ async function setup() {
   }
   const chrome = {
     storage: { local: storage({ mode: 'auto', domains: ['proxied.test'] }), session: storage(), onChanged: changed },
-    runtime: { onInstalled: event(), onStartup: event() },
+    runtime: { onInstalled: event(), onStartup: event(), onMessage: event(), getURL: (file) => `chrome-extension://detour/${file}` },
+    declarativeNetRequest: { updateDynamicRules: async () => {}, getSessionRules: async () => [], updateSessionRules: async () => {} },
     proxy: { settings: { set: async () => {} }, onProxyError: event() },
     privacy: { network: { webRTCIPHandlingPolicy: { set: async () => {}, clear: async () => {} } } },
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, setTitle: async () => {} },

@@ -166,5 +166,20 @@
   },
   "webRtcControlled": {
     "message": "WebRTC 设置由其他扩展控制，本开关未生效。"
+  },
+  "confirmTitle": {
+    "message": "要直连打开名单中的网站吗？"
+  },
+  "confirmAuto": {
+    "message": "切到自动并打开"
+  },
+  "confirmDirect": {
+    "message": "仍然直连打开"
+  },
+  "confirmBack": {
+    "message": "返回上一页"
+  },
+  "confirmUnavailable": {
+    "message": "无法打开此地址，请重新访问。"
   }
 }

@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="confirmTitle"></title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="confirm">
+    <main>
+      <header class="page-header"><h1 data-i18n="confirmTitle"></h1></header>
+      <p id="target-host" class="domain"></p>
+      <p id="target-url"></p>
+      <div class="confirm-actions">
+        <button id="open-auto" type="button" data-i18n="confirmAuto" disabled></button>
+        <button id="open-direct" type="button" class="secondary" data-i18n="confirmDirect" disabled></button>
+        <button id="go-back" type="button" class="secondary" data-i18n="confirmBack" hidden></button>
+      </div>
+      <p id="confirm-error" class="field-error" role="status" hidden></p>
+    </main>
+    <script type="module" src="confirm.js"></script>
+  </body>
+</html>
