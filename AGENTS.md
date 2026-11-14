@@ -6,17 +6,17 @@ Chrome MV3 extension that routes a domain list through the user's SOCKS5 or HTTP
 
 The extension has no runtime dependencies and no build step; the only dev dependency is Playwright (end-to-end tests).
 
-| Command | Purpose | Heavy |
-| --- | --- | --- |
-| `npm ci` | Bootstrap: install Playwright from the lockfile (no browsers) | No |
-| `npx playwright install chromium` | Install the Chromium build matching the locked Playwright (needed once for e2e) | No |
-| `npm test` | Unit tests in `test/` (seconds) | No |
-| `npm run test:e2e` | `e2e/`: loads the extension in Playwright Chromium with an English UI (about 15 s) | Yes |
-| `npm run check` | `npm test` + `npm run test:e2e`, the full gate | Yes |
-| `npm run package` | Build `dist/detour-<manifest version>.zip` (`extension/` contents and `LICENSE` at the zip root) | No |
-| `npm run update-psl` | Regenerate `extension/lib/psl-data.js` from publicsuffix.org (network); run `npm test` afterwards | No |
+| Command | Purpose |
+| --- | --- |
+| `npm ci` | Bootstrap: install Playwright from the lockfile (no browsers) |
+| `npx playwright install chromium` | Install the Chromium build matching the locked Playwright (needed once for e2e) |
+| `npm test` | Unit tests in `test/` (seconds) |
+| `npm run test:e2e` | `e2e/`: loads the extension in Playwright Chromium with an English UI (about 15 s) |
+| `npm run check` | `npm test` + `npm run test:e2e`, the full gate |
+| `npm run package` | Build `dist/detour-<manifest version>.zip` (`extension/` contents and `LICENSE` at the zip root) |
+| `npm run update-psl` | Regenerate `extension/lib/psl-data.js` from publicsuffix.org (network); run `npm test` afterwards |
 
-On oracle-arm, heavy local commands take turns on a host lock (`Infrastructure/docs/workspace-agents.md` §4): a new worktree installs dependencies with the host command `worktree-deps` instead of `npm ci` (it hardlinks the canonical checkout's `node_modules` when the lockfile matches), and commands marked Heavy run with the `heavy` prefix, e.g. `heavy npm run check`. CI runs them directly.
+On oracle-arm, a new worktree installs dependencies with the host command `worktree-deps` instead of `npm ci` (it hardlinks the canonical checkout's `node_modules` when the lockfile matches).
 
 Node 26+ (Node 26 locally and in CI). E2E uses `channel: 'chromium'` (new headless supports extensions) with the Chromium build that matches the locked Playwright version.
 
